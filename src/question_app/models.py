@@ -1,0 +1,186 @@
+from enum import Enum
+from typing import Annotated, assert_never
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ElasticsearchSettings(BaseModel):
+    url: str
+    api_key: str
+
+
+class OllamaSettings(BaseModel):
+    url: str
+
+
+class OpenaiSettings(BaseModel):
+    base_url: str
+    api_key: str
+    chat_model: str
+    reason_model: str
+
+
+class QdrantSettings(BaseModel):
+    url: str
+    api_key: str
+
+
+class SqlalchemySettings(BaseModel):
+    url: str
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_nested_delimiter="_", env_nested_max_split=1)
+    callback_base_url: HttpUrl
+    skip_callback: bool = False
+    elasticsearch: ElasticsearchSettings
+    ollama: OllamaSettings
+    openai: OpenaiSettings
+    qdrant: QdrantSettings
+    sqlalchemy: SqlalchemySettings
+
+
+class QuestionSource(Enum):
+    SameOrder = "same_order"
+    SameCourse = "same_course"
+    Historical = "historical"
+    Imitated = "imitated"
+    Generated = "generated"
+    Rewritten = "rewritten"
+
+    def to_int(self) -> int:
+        match self:
+            case QuestionSource.SameOrder:
+                return 1
+            case QuestionSource.SameCourse:
+                return 2
+            case _:
+                return 3
+
+
+class QuestionType(Enum):
+    Any = "any"
+    Calculation = "calculation"
+    MultipleChoice = "multiple choice"
+    Open = "open"
+
+    @classmethod
+    def from_value(cls, val: str | None) -> "QuestionType":
+        if val is None:
+            return QuestionType.Open
+        match val:
+            case "calculation":
+                return QuestionType.Calculation
+            case "multiple choice":
+                return QuestionType.MultipleChoice
+            case "open":
+                return QuestionType.Open
+            case _:
+                return QuestionType.Open
+
+    def to_int(self) -> int:
+        match self:
+            case QuestionType.Any:
+                raise ValueError("QuestionType.Any cannot be converted to an integer")
+            case QuestionType.Calculation:
+                return 4
+            case QuestionType.MultipleChoice:
+                return 1
+            case QuestionType.Open:
+                return 2
+            case _:
+                assert_never(self)
+
+    def to_natural_language(self) -> str:
+        match self:
+            case QuestionType.Any:
+                return "a question of any type"
+            case QuestionType.Calculation:
+                return "a calculation question"
+            case QuestionType.MultipleChoice:
+                return "a multiple choice question"
+            case QuestionType.Open:
+                return "an open question"
+            case _:
+                assert_never(self)
+
+    @classmethod
+    def from_elasticsearch_keyword(cls, val: str | None) -> "QuestionType":
+        if val is None:
+            return QuestionType.Open
+        match val:
+            case "calculation":
+                return QuestionType.Calculation
+            case "mcq":
+                return QuestionType.MultipleChoice
+            case "open":
+                return QuestionType.Open
+            case _:
+                return QuestionType.Open
+
+    def to_elasticsearch_keyword(self) -> str | None:
+        match self:
+            case QuestionType.Any:
+                return None
+            case QuestionType.Calculation:
+                return "calculation"
+            case QuestionType.MultipleChoice:
+                return "mcq"
+            case QuestionType.Open:
+                return "open"
+            case _:
+                assert_never(self)
+
+
+class Question(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    content: str
+    source: QuestionSource
+    type: QuestionType
+    meta_info: str | None = None
+
+
+class KeyPoint(BaseModel):
+    name: str
+    explanation: str
+    relevance: str
+
+
+class QuestionFormInputsReq(BaseModel):
+    exam_kp: Annotated[str, Field(min_length=1)]
+    context: str | None
+    question_type: QuestionType
+
+    @field_validator("question_type", mode="before")
+    def validate_question_type(cls, val: object) -> QuestionType:
+        if not isinstance(val, int):
+            raise TypeError("question_type must be an integer")
+        match val:
+            case 0:
+                return QuestionType.Any
+            case 1:
+                return QuestionType.MultipleChoice
+            case 2:
+                return QuestionType.Open
+            case 4:
+                return QuestionType.Calculation
+            case _:
+                raise ValueError("the value of question_type is invalid")
+
+
+class QuestionGenerateReq(QuestionFormInputsReq):
+    task_id: int
+    course_id: int
+    major_name: str | None = None
+    course_name: str | None = None
+    course_code: str | None = None
+    university_name: str | None = None
+
+
+class QuestionRewriteReq(QuestionFormInputsReq):
+    rewritten_from: int
+    rewritten_from_no: str  # do not use UUID
+    rewritten_prompt: Annotated[str, Field(min_length=1)]
+    question: Annotated[str, Field(min_length=1)]

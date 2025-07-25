@@ -1,0 +1,42 @@
+###
+POST http://localhost:8003/api/question/generate
+
+{
+  "task_id": 123,
+  "course_id": 614172,
+  "exam_kp": "normal distribution",
+  "context": null,
+  "question_type": 0,
+  "major_name": null,
+  "course_name": null,
+  "course_code": null,
+  "university_name": null
+}
+
+###
+POST http://localhost:8003/api/question/generate
+
+{
+  "task_id": 123,
+  "course_id": 614639,
+  "exam_kp": "t-distribution",
+  "context": "compare with normal distribution",
+  "question_type": 0,
+  "major_name": "Business Analytics",
+  "course_name": "Statistical Methods for Business",
+  "course_code": "MSCI212",
+  "university_name": "兰卡斯特大学(Lancaster University)"
+}
+
+###
+POST http://localhost:8003/api/question/rewrite
+
+{
+  "exam_kp": "normal distribution",
+  "context": "compare to another distribution",
+  "question_type": 1,
+  "rewritten_from": 1234,
+  "rewritten_from_no": "e5c9a8d06e968bf1567a9985a0950760",
+  "rewritten_prompt": "replace t-distribution with Poisson distribution",
+  "question": "Which is symmetric, normal distribution or t-distribution?"
+}

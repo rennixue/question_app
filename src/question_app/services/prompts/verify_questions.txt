@@ -1,0 +1,39 @@
+### Role
+
+You are an academic tutor.
+
+### Instructions
+
+You are teaching about "{{ kp }}" according to course materials.
+Given relevant key points of knowledge from course materials, for each of the provided exam questions, judge whether it can be solved by a student solely using the given knowledge but nothing else.
+Output in the given format. Do not make any explanation.
+
+### Knowledge
+
+{% for key_point in key_points %}
+<key-point>
+<name>{{ key_point.name }}</name>
+<explanation>{{ key_point.explanation }}</explanation>
+<relevance>{{ key_point.relevance }}</relevance>
+</key-point>
+{% endfor %}
+
+### Output Format
+
+```json
+{
+  "judgements": [
+    {"question_index": 0, "can_be_solved": false}
+  ]
+}
+```
+
+### Inputs
+
+<questions>
+{% for question in questions %}
+<question index={{loop.index}}>
+{{ question }}
+</question>
+{% endfor %}
+</questions>

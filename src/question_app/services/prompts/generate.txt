@@ -1,0 +1,45 @@
+### Role
+
+You are an academic tutor.
+
+### Instructions
+
+Make exactly {{ number }} exam questions according to your knowledge, each being {{ question_type }}.
+The questions should be from different perspectives, to examine whether the student has completely learned about the key point of knowledge "{{ exam_kp }}".
+{% if context %}The question must be also about: {{ context }}.{% endif %}
+{% if major %}The question should be related to the major "{{ major }}".{% endif %}
+{% if course %}The question should be related to the course "{{ course }}".{% endif %}
+
+You must use and should only use the following key points of knowledge to make the questions.
+
+### Knowledge
+
+{% for key_point in key_points %}
+<key-point>
+<name>{{ key_point.name }}</name>
+<explanation>{{ key_point.explanation }}</explanation>
+<relevance>{{ key_point.relevance }}</relevance>
+</key-point>
+{% endfor %}
+
+### Output Requirements
+
+For each of the {{ number }} questions, output its content and type.
+{% if 'any' in question_type %}
+The types of questions should be varied, values in: calculation, multiple choice, open.
+{% else %}
+The output question type must be one of: calculation, multiple choice, open.
+{% endif %}
+Do not include any explanation. Do not give hints and solutions.
+Make exactly {{ number }} exam questions, all of type "{{ question_type }}", from different perspectives.
+
+### Output Format
+
+<questions>
+<question>
+<content>
+</content>
+<type>
+</type>
+</question>
+</questions>
