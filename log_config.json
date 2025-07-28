@@ -32,7 +32,7 @@
             "filters": ["request_id"],
             "formatter": "default",
             "class": "logging.handlers.TimedRotatingFileHandler",
-            "filename": "logs/app.log",
+            "filename": "logs/default.log",
             "when": "D",
             "encoding": "utf8"
         },
@@ -40,7 +40,7 @@
             "filters": ["request_id"],
             "formatter": "access",
             "class": "logging.handlers.TimedRotatingFileHandler",
-            "filename": "logs/app.log",
+            "filename": "logs/access.log",
             "when": "D",
             "encoding": "utf8"
         },
@@ -48,7 +48,7 @@
             "filters": ["request_id"],
             "formatter": "debug",
             "class": "logging.handlers.TimedRotatingFileHandler",
-            "filename": "logs/app.log",
+            "filename": "logs/debug.log",
             "when": "D",
             "encoding": "utf8"
         }

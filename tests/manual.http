@@ -1,5 +1,20 @@
 ###
-POST http://localhost:8003/api/question/generate
+POST http://localhost:8000/api/question/generate
+
+{
+  "task_id": 123456789,
+  "course_id": 615615,
+  "exam_kp": "equilibrium",
+  "context": "give a case study problem",
+  "question_type": 2,
+  "major_name": "Economics",
+  "course_name": "Economics",
+  "course_code": "ECON0002",
+  "university_name": "伦敦大学学院(University College London)"
+}
+
+###
+POST http://localhost:8000/api/question/generate
 
 {
   "task_id": 123,
@@ -14,7 +29,7 @@ POST http://localhost:8003/api/question/generate
 }
 
 ###
-POST http://localhost:8003/api/question/generate
+POST http://localhost:8000/api/question/generate
 
 {
   "task_id": 123,
@@ -29,7 +44,7 @@ POST http://localhost:8003/api/question/generate
 }
 
 ###
-POST http://localhost:8003/api/question/rewrite
+POST http://localhost:8000/api/question/rewrite
 
 {
   "exam_kp": "normal distribution",

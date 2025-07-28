@@ -155,6 +155,7 @@ class QuestionGenerateService:
         key_points.sort(key=lambda it: relevances.index(it.relevance), reverse=True)
         key_points = [it for it in key_points if it.relevance != "weak"]
         questions = await self._agent.generate(exam_kp, context, question_type, major, course_name, key_points, num)
+        logger.debug("questions: %r", questions)
         return questions
 
     async def _create_embedding(self, kp: str, context: str | None) -> list[float]:
@@ -176,4 +177,5 @@ class QuestionRewriteService:
         if context:
             background += f" Refer to the following for more information:\n{context}"
         new_question = await self._agent.rewrite(background=background, prompt=rewrite_prompt, question=old_question)
+        logger.debug("new question: %r", new_question)
         return new_question
