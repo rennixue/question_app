@@ -6,9 +6,15 @@ You are an academic tutor.
 
 Make exactly {{ number }} exam questions according to your knowledge, each being {{ question_type }}.
 The questions should be from different perspectives, to examine whether the student has completely learned about the key point of knowledge "{{ exam_kp }}".
-{% if context %}The question must be also about: {{ context }}.{% endif %}
-{% if major %}The question should be related to the major "{{ major }}".{% endif %}
-{% if course %}The question should be related to the course "{{ course }}".{% endif %}
+{% if context %}
+The questions must be also about: {{ context }}.
+{% endif %}
+{% if major %}
+The questions should be related to the major "{{ major }}".
+{% endif %}
+{% if course %}
+The questions should be related to the course "{{ course }}".
+{% endif %}
 
 You must use and should only use the following key points of knowledge to make the questions.
 
@@ -32,6 +38,7 @@ The output question type must be one of: calculation, multiple choice, open.
 {% endif %}
 Do not include any explanation. Do not give hints and solutions.
 Make exactly {{ number }} exam questions, all of type "{{ question_type }}", from different perspectives.
+Note that if a question is a multiple choice question, you must generate the four choice options in the content like A) B) C) D).
 
 ### Output Format
 
