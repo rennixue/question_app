@@ -53,7 +53,7 @@ class QdrantService:
             vec,
             query_filter=qm.Filter(must=[qm.FieldCondition(key="order_id", match=qm.MatchValue(value=order_id))]),
             with_payload=["chunk"],
-            score_threshold=0.4,
+            score_threshold=0.2,
             limit=min(max(4, limit * 2), limit + 4),
         )
         if len(resp.points) == 0:

@@ -123,7 +123,7 @@ class QuestionImitateService:
         return qs_verified
 
     async def _create_embedding(self, kp: str, context: str | None) -> list[float]:
-        text = f"Definition of {kp}."
+        text = f"Definition or explanation of {kp}."
         if context:
             text += f"\nKnowledge of {kp} related to the following context:\n{context.strip()}"
         vec = await self._ollama.embed_one(text)
@@ -159,7 +159,7 @@ class QuestionGenerateService:
         return questions
 
     async def _create_embedding(self, kp: str, context: str | None) -> list[float]:
-        text = f"Definition of {kp}."
+        text = f"Definition or explanation of {kp}."
         if context:
             text += f"\nKnowledge of {kp} related to the following context:\n{context.strip()}"
         vec = await self._ollama.embed_one(text)
