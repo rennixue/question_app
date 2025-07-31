@@ -38,6 +38,8 @@ class QuestionSearchService:
         kp_vec, q_vec = await self._create_embeddings(kp, context, major_name, course_name)
         q_type = question_type.to_elasticsearch_keyword()
         majors = await self.find_majors(major_name) if major_name else None
+        if not majors:
+            return [], []
         if course_code and university:
             questions_same_course = await self._elasticsearch.search_questions_same_course(
                 kp=kp,

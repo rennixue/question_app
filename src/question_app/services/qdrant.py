@@ -38,7 +38,7 @@ class QdrantService:
     async def query_closest_major(self, vec: list[float]) -> str | None:
         # SELECT * FROM db_major_cluster WHERE sim_rank=2;
         resp = await self._client.query_points(
-            "db_major", vec, using="major", with_payload=["major"], score_threshold=0.8, limit=1
+            "db_major", vec, using="major", with_payload=["major"], score_threshold=0.7, limit=1
         )
         if not resp.points:
             return None
