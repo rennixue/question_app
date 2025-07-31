@@ -118,7 +118,16 @@ class ElasticsearchService:
                 "filter": {"bool": {"filter": filters, "must_not": must_nots}},
             },
             size=size,
-            source_includes=["question_id", "content", "university", "major", "course_name", "course_code", "key_kps"],
+            source_includes=[
+                "question_id",
+                "content",
+                "question_type",
+                "university",
+                "major",
+                "course_name",
+                "course_code",
+                "key_kps",
+            ],
         )
         return resp
 
