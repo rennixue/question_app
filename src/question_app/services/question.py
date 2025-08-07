@@ -116,7 +116,7 @@ class QuestionImitateService:
     ) -> list[Question]:
         kp = exam_kp.strip().lower()
         vec = await self._create_embedding(kp, context)
-        pairs = await self._qdrant.query_chunks(kp, vec, course_id, 8)
+        pairs = await self._qdrant.query_chunks(kp, vec, course_id, 12)
         logger.debug("len(chunks)=%d", len(pairs))
         key_points = await self._agent.analyze_chunks(kp, [it[1] for it in pairs])
         relevances = ["weak", "medium", "strong"]

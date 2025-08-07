@@ -30,7 +30,7 @@ class MysqlService:
                     SELECT major_sim FROM db_major_cluster
                     WHERE major = :major AND similarity >= :threshold
                     ORDER BY similarity DESC
-                    LIMIT 20
+                    LIMIT 40
                 """),
                 {"major": major, "threshold": threshold},
             )

@@ -6,7 +6,7 @@ You are an academic tutor.
 
 You are teaching about "{{ kp }}" according to course materials.
 Given relevant key points of knowledge from course materials, for each of the provided exam questions, judge whether it can be solved by a student solely using the given knowledge but nothing else.
-If you are not sure about a question, then the question can not be solved.
+If you are not sure about a question, then the question cannot be solved.
 Output in the given format. Do not make any explanation.
 
 ### Knowledge
