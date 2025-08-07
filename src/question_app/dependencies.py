@@ -62,7 +62,9 @@ AgentDep = Annotated[AgentService, Depends(get_or_create_agent)]
 
 async def create_elasticsearch(settings: SettingsDep) -> ElasticsearchService:
     # will be sent to async task, do not close in dependency definition
-    client = AsyncElasticsearch(settings.elasticsearch.url, api_key=settings.elasticsearch.api_key, verify_certs=False)
+    client = AsyncElasticsearch(
+        settings.elasticsearch.url, api_key=settings.elasticsearch.api_key, verify_certs=False, timeout=20.0
+    )
     return ElasticsearchService(client)
 
 
@@ -109,7 +111,7 @@ OllamaDep = Annotated[OllamaService, Depends(create_ollama)]
 
 async def create_qdrant(settings: SettingsDep) -> QdrantService:
     # will be sent to async task, do not close in dependency definition
-    client = AsyncQdrantClient(settings.qdrant.url, api_key=settings.qdrant.api_key)
+    client = AsyncQdrantClient(settings.qdrant.url, api_key=settings.qdrant.api_key, timeout=20)
     return QdrantService(client)
 
 
