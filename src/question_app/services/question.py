@@ -52,6 +52,15 @@ class QuestionSearchService:
             )
         else:
             questions_same_course = []
+        if questions_same_course:
+            int_ids = [it.id.int for it in questions_same_course]
+            pairs = await self._mysql.select_question_contents(int_ids)
+            for int_id, q_content in pairs:
+                for it in questions_same_course:
+                    if it.id.int == int_id:
+                        if q_content:
+                            it.content = q_content
+                        break
         questions_historical = await self._elasticsearch.search_questions_historical(
             kp=kp,
             kp_vec=kp_vec,
@@ -62,6 +71,15 @@ class QuestionSearchService:
             university=university,
             limit=limit_historical,
         )
+        if questions_historical:
+            int_ids = [it.id.int for it in questions_historical]
+            pairs = await self._mysql.select_question_contents(int_ids)
+            for int_id, q_content in pairs:
+                for it in questions_historical:
+                    if it.id.int == int_id:
+                        if q_content:
+                            it.content = q_content
+                        break
         return questions_same_course, questions_historical
 
     async def _create_embeddings(

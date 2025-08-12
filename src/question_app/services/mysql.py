@@ -1,8 +1,8 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from textwrap import dedent
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import text
+from sqlalchemy.sql import bindparam, text
 from sqlalchemy.sql.elements import TextClause
 
 
@@ -36,3 +36,15 @@ class MysqlService:
             )
             majors = cursor.scalars().all()
         return list(majors)
+
+    async def select_question_contents(self, question_ids: Iterable[int]) -> list[tuple[int, str]]:
+        async with self._session_factory() as session:
+            cursor = await session.execute(
+                sql("""
+                    SELECT question_id, content FROM db_exam_question_content
+                    WHERE question_id IN :question_ids
+                """).bindparams(bindparam("question_ids", expanding=True)),
+                {"question_ids": question_ids},
+            )
+            rows = cursor.all()
+        return [(it[0], it[1]) for it in rows]
