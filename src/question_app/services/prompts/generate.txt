@@ -38,7 +38,7 @@ The output question type must be one of: calculation, multiple choice, open.
 {% endif %}
 Do not include any explanation. Do not give hints and solutions.
 Make exactly {{ number }} exam questions, all of type "{{ question_type }}", from different perspectives.
-Note that if a question is a multiple choice question, you must generate the four choice options in the content like A) B) C) D).
+Note that if a question is a multiple choice question, you must generate the four choice options in the content labeled as A) B) C) D), and the correct choice should has equal possibilities to appear in each of the options.
 
 ### Output Format
 

@@ -14,7 +14,7 @@ Note that:
 
 For each entity, you must answer:
 - name: How is the entity generally called in course materials.
-- explanation: What is the entity about, and how it is related to "{{ query }}". Output "unknown" if nothing can be derived.
+- explanation: What is the entity about, and how it is related to "{{ query }}". Use consise language in one sentence. Output "unknown" if nothing can be derived.
 - strength: The strength of relevance between the entity and "{{ query }}". It must be one of: "strong", "medium", "weak".
 
 If no course materials provided, use your priori knowledge to make the summary and list a few entities.

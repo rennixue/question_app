@@ -139,7 +139,7 @@ class QuestionImitateService:
         key_points = await self._agent.analyze_chunks(kp, [it[1] for it in pairs])
         relevances = ["weak", "medium", "strong"]
         key_points.sort(key=lambda it: relevances.index(it.relevance), reverse=True)
-        qs_verified = await self._agent.verify_questions(questions, kp, key_points)
+        qs_verified = await self._agent.verify_questions(questions, exam_kp, key_points)
         return qs_verified
 
     async def _create_embedding(self, kp: str, context: str | None) -> list[float]:

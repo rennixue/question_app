@@ -51,7 +51,7 @@ class MysqlService:
             rows = cursor.all()
         return [(it[0], it[1]) for it in rows]
 
-    async def select_order_kps(self, order_id: int, file_limit: int, kp_limit: int) -> list[ExtractedFile]:
+    async def select_order_kps(self, order_id: int, file_limit: int, kp_limit: int) -> tuple[bool, list[ExtractedFile]]:
         async with self._session_factory() as session:
             cursor = await session.execute(
                 sql("""
@@ -63,9 +63,20 @@ class MysqlService:
                 {"order_id": order_id, "file_limit": file_limit},
             )
             rows = cursor.all()
+            if len(rows) == 0:
+                cursor = await session.execute(
+                    sql("""
+                    SELECT 1 FROM db_order_file_kp_done
+                    WHERE order_id = :order_id
+                    LIMIT 1
+                """),
+                    {"order_id": order_id},
+                )
+                if cursor.first() is None:
+                    return False, []
         files: list[ExtractedFile] = []
         for file_name, kps_str in rows:
             if file_name and kps_str:
                 if kps := kps_str.split(","):
                     files.append(ExtractedFile(file_name=file_name, kps=kps[:kp_limit]))
-        return files
+        return True, files

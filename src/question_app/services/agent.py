@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
 
@@ -88,6 +89,29 @@ class AgentService:
             content, q_type = self._parse_question(it.group())
             questions.append(Question(content=content, type=q_type, source=QuestionSource.Generated))
         return questions
+
+    async def generate_stream(
+        self,
+        exam_kp: str,
+        context: str | None,
+        question_type: QuestionType,
+        major: str | None,
+        course: str | None,
+        key_points: list[KeyPoint],
+        number: int,
+    ) -> AsyncIterator[str]:
+        user_msg = self._tmpl_generate.render(
+            exam_kp=exam_kp,
+            context=context,
+            question_type=question_type.to_natural_language(),
+            major=major,
+            course=course,
+            key_points=key_points,
+            number=number,
+        )
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+            async for asst_msg in result.stream_text(delta=True, debounce_by=0.2):
+                yield asst_msg
 
     async def rewrite(self, *, background: str, prompt: str, question: str) -> Question:
         user_msg = self._tmpl_rewrite.render(background=background, prompt=prompt, question=question)

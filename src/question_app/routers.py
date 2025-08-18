@@ -1,10 +1,14 @@
 import asyncio
+import json
 import logging
 from asyncio import Task, TaskGroup
+from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 
 from .dependencies import (
+    AgentDep,
     CallbackDep,
     ElasticsearchDep,
     MysqlDep,
@@ -92,8 +96,8 @@ async def wrapped_generate(
         await callback.notify_generate_ok(req_body.task_id, questions)
 
 
-@router.post("/question/generate", status_code=202)
-async def post_question_generate(
+@router.post("/question/generate-nostream", status_code=202)
+async def post_question_generate_nostream(
     req_body: QuestionGenerateReq,
     callback: CallbackDep,
     question_generate: QuestionGenerateDep,
@@ -146,5 +150,113 @@ async def post_question_rewrite(
 async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None = None, kp_limit: int | None = None):
     file_limit = file_limit or 20
     kp_limit = kp_limit or 10
-    files = await mysql.select_order_kps(course_id, file_limit, kp_limit)
-    return {"course_id": course_id, "files": files}
+    precessed, files = await mysql.select_order_kps(course_id, file_limit, kp_limit)
+    return {"course_id": course_id, "precessed": precessed, "files": files}
+
+
+def encode_chunk(obj: Any) -> str:
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+
+async def iter_chunks(
+    r: QuestionGenerateReq,
+    callback: CallbackDep,
+    agent: AgentDep,
+    ollama: OllamaDep,
+    qdrant: QdrantDep,
+    question_search: QuestionSearchDep,
+):
+    try:
+        yield encode_chunk({"done": False, "message": "开始处理。\n"})
+        # step 1: search questions
+        async with question_search._elasticsearch:  # type: ignore
+            qs_same_course, qs_historical = await question_search.find_questions(
+                r.exam_kp,
+                r.context,
+                r.question_type,
+                r.major_name,
+                r.course_name,
+                r.course_code,
+                r.university_name,
+                10,
+                20,
+            )
+        logger.debug(f"{len(qs_same_course)=}, {len(qs_historical)=}")
+        yield encode_chunk({"done": False, "message": "搜索真题完成。\n"})
+        # step 2: query chunks
+        kp = r.exam_kp.strip().lower()
+        text = f"Definition or explanation of {kp}."
+        if r.context:
+            text += f"\nKnowledge of {kp} related to the following context:\n{r.context.strip()}"
+        vec = await ollama.embed_one(text)
+        pairs = await qdrant.query_chunks(kp, vec, r.course_id, 8)
+        logger.debug("len(chunks)=%d", len(pairs))
+        yield encode_chunk({"done": False, "message": "搜索课程材料完成。\n"})
+        # step 3: generate key points
+        key_points = await agent.analyze_chunks(kp, [it[1] for it in pairs])
+        relevances = ["weak", "medium", "strong"]
+        key_points.sort(key=lambda it: relevances.index(it.relevance), reverse=True)
+        key_points = [it for it in key_points if it.relevance != "weak"]
+        yield encode_chunk({"done": False, "message": "理解知识点完成。\n"})
+        # step 4: create verify task, this is usually quicker
+        if qs_historical:
+            task_verify = asyncio.create_task(agent.verify_questions(qs_historical, r.exam_kp, key_points))
+        else:
+            task_verify = None
+        # step 5: generate questions
+        qs_generate: list[Question] = []
+        async for chunk in agent.generate_stream(
+            r.exam_kp, r.context, r.question_type, r.major_name, r.course_name, key_points, 10
+        ):
+            yield encode_chunk({"done": False, "message": chunk})
+        yield encode_chunk({"done": False, "message": "生成题目完成。\n"})
+        logger.debug("generate completed")
+        # step 6: await verify task
+        if task_verify is not None:
+            qs_verified = await task_verify
+        else:
+            qs_verified = []
+        # step 7: concat and filter
+        questions = [*qs_same_course, *qs_verified, *qs_generate]
+        if r.question_type != QuestionType.Any:
+            questions = [it for it in questions if it.type == r.question_type]
+        logger.debug(f"{len(questions)=}")
+        # step 8: notify callback
+        await callback.notify_generate_ok(r.task_id, questions)
+    except Exception as exc:
+        logger.error("generate error: %r", exc)
+        await callback.notify_generate_err(r.task_id, "error when generate")
+    finally:
+        yield encode_chunk({"done": True, "message": ""})
+
+
+@router.post("/question/generate")
+async def post_question_generate(
+    req_body: QuestionGenerateReq,
+    callback: CallbackDep,
+    agent: AgentDep,
+    ollama: OllamaDep,
+    qdrant: QdrantDep,
+    question_search: QuestionSearchDep,
+):
+    return StreamingResponse(
+        iter_chunks(req_body, callback, agent, ollama, qdrant, question_search), media_type="application/x-ndjson"
+    )
+
+
+async def iter_chunks_test(req: Request):
+    try:
+        yield encode_chunk({"done": False, "message": req.method})
+        for k, v in req.headers.items():
+            await asyncio.sleep(0.2)
+            yield encode_chunk({"done": False, "message": f"{k}: {v}"})
+    finally:
+        yield encode_chunk({"done": True, "message": ""})
+
+
+# NOTE must add /api prefix
+@router.route(
+    "/api/stream-test", methods=["CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"]
+)
+async def route_stream_test(req: Request):
+    return StreamingResponse(iter_chunks_test(req), media_type="application/x-ndjson")
