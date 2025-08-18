@@ -140,3 +140,11 @@ async def post_question_rewrite(
     logger.debug("request body: %r", req_body)
     asyncio.create_task(wrapped_rewrite(120.0, req_body, callback, question_rewrite))
     return {"rewritten_from": req_body.rewritten_from, "status": "created", "message": "ok"}
+
+
+@router.get("/prepared/{course_id}/kps")
+async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None = None, kp_limit: int | None = None):
+    file_limit = file_limit or 20
+    kp_limit = kp_limit or 10
+    files = await mysql.select_order_kps(course_id, file_limit, kp_limit)
+    return {"course_id": course_id, "files": files}

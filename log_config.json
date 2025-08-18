@@ -31,26 +31,29 @@
         "default": {
             "filters": ["request_id"],
             "formatter": "default",
-            "class": "logging.handlers.TimedRotatingFileHandler",
+            "class": "logging.handlers.RotatingFileHandler",
             "filename": "logs/default.log",
-            "when": "D",
-            "encoding": "utf8"
+            "maxBytes": 1048576,
+            "backupCount": 1,
+            "encoding": "utf-8"
         },
         "access": {
             "filters": ["request_id"],
             "formatter": "access",
-            "class": "logging.handlers.TimedRotatingFileHandler",
+            "class": "logging.handlers.RotatingFileHandler",
             "filename": "logs/access.log",
-            "when": "D",
-            "encoding": "utf8"
+            "maxBytes": 1048576,
+            "backupCount": 1,
+            "encoding": "utf-8"
         },
         "debug": {
             "filters": ["request_id"],
             "formatter": "debug",
-            "class": "logging.handlers.TimedRotatingFileHandler",
+            "class": "logging.handlers.RotatingFileHandler",
             "filename": "logs/debug.log",
-            "when": "D",
-            "encoding": "utf8"
+            "maxBytes": 1048576,
+            "backupCount": 1,
+            "encoding": "utf-8"
         }
     },
     "loggers": {

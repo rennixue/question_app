@@ -55,3 +55,6 @@ POST http://localhost:8000/api/question/rewrite
   "rewritten_prompt": "replace t-distribution with Poisson distribution",
   "question": "Which is symmetric, normal distribution or t-distribution?"
 }
+
+###
+GET http://localhost:8000/api/prepared/-1/kps?file_limit=20&kp_limit=10

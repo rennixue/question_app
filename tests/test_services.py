@@ -2,6 +2,7 @@ import pytest
 
 from question_app.models import QuestionType
 from question_app.services import (
+    MysqlService,
     OllamaService,
     QdrantService,
     QuestionGenerateService,
@@ -9,6 +10,14 @@ from question_app.services import (
     QuestionRewriteService,
     QuestionSearchService,
 )
+
+
+@pytest.mark.skip
+async def test_select_order_kps(mysql: MysqlService):
+    order_id = -1
+    files = await mysql.select_order_kps(order_id, 5, 2)
+    for it in files:
+        print(it)
 
 
 @pytest.mark.skip

@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import bindparam, text
 from sqlalchemy.sql.elements import TextClause
 
+from ..models import ExtractedFile
+
 
 def sql(s: str) -> TextClause:
     return text(dedent(s))
@@ -48,3 +50,22 @@ class MysqlService:
             )
             rows = cursor.all()
         return [(it[0], it[1]) for it in rows]
+
+    async def select_order_kps(self, order_id: int, file_limit: int, kp_limit: int) -> list[ExtractedFile]:
+        async with self._session_factory() as session:
+            cursor = await session.execute(
+                sql("""
+                    SELECT file_name, kp_list FROM db_order_file_kp
+                    WHERE order_id = :order_id AND kp_list IS NOT NULL
+                    ORDER BY file_name
+                    LIMIT :file_limit
+                """),
+                {"order_id": order_id, "file_limit": file_limit},
+            )
+            rows = cursor.all()
+        files: list[ExtractedFile] = []
+        for file_name, kps_str in rows:
+            if file_name and kps_str:
+                if kps := kps_str.split(","):
+                    files.append(ExtractedFile(file_name=file_name, kps=kps[:kp_limit]))
+        return files

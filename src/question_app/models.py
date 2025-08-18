@@ -184,3 +184,8 @@ class QuestionRewriteReq(QuestionFormInputsReq):
     rewritten_from_no: str  # do not use UUID
     rewritten_prompt: Annotated[str, Field(min_length=1)]
     question: Annotated[str, Field(min_length=1)]
+
+
+class ExtractedFile(BaseModel):
+    file_name: Annotated[str, Field(min_length=1)]
+    kps: Annotated[list[str], Field(min_length=1)]
