@@ -156,7 +156,7 @@ async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None 
 
 
 def encode_chunk(obj: Any) -> str:
-    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return "data: " + json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n\n"
 
 
 async def iter_chunks(
@@ -248,7 +248,7 @@ async def post_question_generate_stream(
 ):
     logger.debug("request body: %r", req_body)
     return StreamingResponse(
-        iter_chunks(req_body, callback, agent, ollama, qdrant, question_search), media_type="application/x-ndjson"
+        iter_chunks(req_body, callback, agent, ollama, qdrant, question_search), media_type="text/event-stream"
     )
 
 
@@ -269,4 +269,4 @@ async def iter_chunks_test(req: Request):
     "/api/stream-test", methods=["CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"]
 )
 async def route_stream_test(req: Request):
-    return StreamingResponse(iter_chunks_test(req), media_type="application/x-ndjson")
+    return StreamingResponse(iter_chunks_test(req), media_type="text/event-stream")
