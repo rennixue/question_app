@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from asyncio import Task, TaskGroup
 from typing import Any
 
@@ -19,7 +20,7 @@ from .dependencies import (
     QuestionRewriteDep,
     QuestionSearchDep,
 )
-from .models import Question, QuestionGenerateReq, QuestionRewriteReq, QuestionType
+from .models import Question, QuestionGenerateReq, QuestionRewriteReq, QuestionSource, QuestionType
 
 logger = logging.getLogger(__name__)
 
@@ -205,11 +206,17 @@ async def iter_chunks(
             task_verify = None
         # step 5: generate questions
         qs_generate: list[Question] = []
+        chunks: list[str] = []
         async for chunk in agent.generate_stream(
             r.exam_kp, r.context, r.question_type, r.major_name, r.course_name, key_points, 10
         ):
             yield encode_chunk({"done": False, "message": chunk})
-        yield encode_chunk({"done": False, "message": "生成题目完成。\n"})
+            chunks.append(chunk)
+        asst_msg = "".join(chunks)
+        for it in re.finditer(r"(?s)<question>(.+?)</question>", asst_msg):
+            q_content, q_type = agent._parse_question(it.group())  # type: ignore
+            qs_generate.append(Question(content=q_content, type=q_type, source=QuestionSource.Generated))
+        yield encode_chunk({"done": False, "message": "\n生成题目完成。"})
         logger.debug("generate completed")
         # step 6: await verify task
         if task_verify is not None:
@@ -239,6 +246,7 @@ async def post_question_generate(
     qdrant: QdrantDep,
     question_search: QuestionSearchDep,
 ):
+    logger.debug("request body: %r", req_body)
     return StreamingResponse(
         iter_chunks(req_body, callback, agent, ollama, qdrant, question_search), media_type="application/x-ndjson"
     )
