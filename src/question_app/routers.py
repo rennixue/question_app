@@ -97,8 +97,8 @@ async def wrapped_generate(
         await callback.notify_generate_ok(req_body.task_id, questions)
 
 
-@router.post("/question/generate-nostream", status_code=202)
-async def post_question_generate_nostream(
+@router.post("/question/generate", status_code=202)
+async def post_question_generate(
     req_body: QuestionGenerateReq,
     callback: CallbackDep,
     question_generate: QuestionGenerateDep,
@@ -149,8 +149,8 @@ async def post_question_rewrite(
 
 @router.get("/prepared/{course_id}/kps")
 async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None = None, kp_limit: int | None = None):
-    file_limit = file_limit or 20
-    kp_limit = kp_limit or 10
+    file_limit = file_limit or 30
+    kp_limit = kp_limit or 20
     precessed, files = await mysql.select_order_kps(course_id, file_limit, kp_limit)
     return {"course_id": course_id, "precessed": precessed, "files": files}
 
@@ -237,8 +237,8 @@ async def iter_chunks(
         yield encode_chunk({"done": True, "message": ""})
 
 
-@router.post("/question/generate")
-async def post_question_generate(
+@router.post("/question/generate-stream")
+async def post_question_generate_stream(
     req_body: QuestionGenerateReq,
     callback: CallbackDep,
     agent: AgentDep,
@@ -254,10 +254,12 @@ async def post_question_generate(
 
 async def iter_chunks_test(req: Request):
     try:
-        yield encode_chunk({"done": False, "message": req.method})
+        yield encode_chunk({"done": False, "message": req.method + "\n"})
         for k, v in req.headers.items():
             await asyncio.sleep(0.2)
-            yield encode_chunk({"done": False, "message": f"{k}: {v}"})
+            yield encode_chunk({"done": False, "message": f"{k}: "})
+            await asyncio.sleep(0.2)
+            yield encode_chunk({"done": False, "message": f"{v}\n"})
     finally:
         yield encode_chunk({"done": True, "message": ""})
 
