@@ -1,4 +1,5 @@
 import logging
+import random
 import re
 
 from ..models import Question, QuestionType
@@ -9,6 +10,22 @@ from .ollama import OllamaService
 from .qdrant import QdrantService
 
 logger = logging.getLogger(__name__)
+
+
+def reorder_choices(text: str) -> str:
+    try:
+        s = text.strip()
+        parts = re.split(r"(?m)^[A-Z]\) ", s)
+        if len(parts) <= 3 or len(parts) >= 8:
+            return text
+        stem = parts[0]  # last char is \n
+        base_options = [it.strip() for it in parts[1:]]
+        random.shuffle(base_options)
+        new_options = [chr(ord("A") + i) + ") " + it for i, it in enumerate(base_options)]
+        return stem + "\n".join(new_options)
+    except Exception as exc:
+        logger.error("error when reordering: %r, text=%r", exc, text)
+        return text
 
 
 class QuestionSearchService:
@@ -175,6 +192,9 @@ class QuestionGenerateService:
         key_points.sort(key=lambda it: relevances.index(it.relevance), reverse=True)
         key_points = [it for it in key_points if it.relevance != "weak"]
         questions = await self._agent.generate(exam_kp, context, question_type, major, course_name, key_points, num)
+        for it in questions:
+            if it.type == QuestionType.MultipleChoice:
+                it.content = reorder_choices(it.content)
         logger.debug("questions: %r", questions)
         return questions
 
