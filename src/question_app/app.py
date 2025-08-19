@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
@@ -13,6 +14,9 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 app.include_router(router)
 app.add_middleware(RequestIdMiddleware)
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"]
+)
 
 
 @app.exception_handler(RequestValidationError)
