@@ -1,4 +1,5 @@
 import logging
+import re
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -22,17 +23,24 @@ app.add_middleware(
 @app.exception_handler(RequestValidationError)
 async def handle_request_validation_error(request: Request, exc: RequestValidationError):
     logger.error("%r: %r", repr(exc), await request.body())
+    if re.match(r"/api/prepared/\d+/kps", request.url.path):
+        return JSONResponse({"code": 1, "status": 422, "body": {"error": str(exc)}}, 422)
     return JSONResponse({"error": str(exc)}, 422)
 
 
 @app.exception_handler(HTTPException)
 async def handle_http_exception(request: Request, exc: HTTPException):
-    return JSONResponse({"error": str(exc.detail)}, exc.status_code)
+    logger.error(repr(exc))
+    if re.match(r"/api/prepared/\d+/kps", request.url.path):
+        return JSONResponse({"code": 1, "status": exc.status_code, "body": {"error": exc.detail}}, exc.status_code)
+    return JSONResponse({"error": exc.detail}, exc.status_code)
 
 
 @app.exception_handler(Exception)
 async def handle_exception(request: Request, exc: Exception):
     logger.error(repr(exc))
+    if re.match(r"/api/prepared/\d+/kps", request.url.path):
+        return JSONResponse({"code": 1, "status": 500, "body": {"error": "internal server error"}}, 500)
     return JSONResponse({"error": "internal server error"}, 500)
 
 

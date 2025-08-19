@@ -152,7 +152,7 @@ async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None 
     file_limit = file_limit or 30
     kp_limit = kp_limit or 20
     precessed, files = await mysql.select_order_kps(course_id, file_limit, kp_limit)
-    return {"course_id": course_id, "precessed": precessed, "files": files}
+    return {"code": 0, "status": 200, "body": {"course_id": course_id, "precessed": precessed, "files": files}}
 
 
 def encode_chunk(obj: Any) -> str:
