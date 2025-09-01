@@ -210,9 +210,9 @@ class CourseMaterialType(Enum):
                 return cls.LectureNote
             case "other":
                 return cls.Other
-            case "past_paper" | "past paper":
+            case "past_paper" | "past paper" | "exam paper":
                 return cls.PastPaper
-            case "reading" | "readings":
+            case "reading" | "readings" | "reading materials":
                 return cls.Reading
             case "syllabus" | "unit guide":
                 return cls.Syllabus
