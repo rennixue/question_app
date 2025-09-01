@@ -59,7 +59,7 @@ class MysqlService:
         async with self._session_factory() as session:
             cursor = await session.execute(
                 sql("""
-                    SELECT file_name, file_new_type, kp_list FROM db_order_file_kp
+                    SELECT file_name, raw_file_type, file_new_type, kp_list FROM db_order_file_kp
                     WHERE order_id = :order_id
                     ORDER BY file_name
                     LIMIT :file_limit
@@ -72,13 +72,15 @@ class MysqlService:
         files: list[ExtractedFile] = []
         files_with_types: list[ExtractedFileWithType] = []
         all_kps: defaultdict[str, tuple[int, float]] = defaultdict(lambda: (0, 0.0))
-        for file_name, file_type_str_or_null, kps_str in rows:
+        for file_name, raw_file_type, file_new_type, kps_str in rows:
             if not file_name:
                 continue
-            if file_type_str_or_null is None:
+            if file_new_type is None:
                 file_type = CourseMaterialType.LectureNote
             else:
-                file_type = CourseMaterialType.from_string(file_type_str_or_null)
+                file_type = CourseMaterialType.from_string(file_new_type)
+                if file_type == CourseMaterialType.LectureNote and raw_file_type not in (5, 26):
+                    file_type = CourseMaterialType.Other
             kps_str: str | None
             if kps_str is None:
                 kps: list[str] = []
