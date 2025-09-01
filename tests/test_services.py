@@ -15,9 +15,13 @@ from question_app.services import (
 @pytest.mark.skip
 async def test_select_order_kps(mysql: MysqlService):
     order_id = -1
-    processed, files = await mysql.select_order_kps(order_id, 5, 2)
+    processed, files, files_with_types, order_kps = await mysql.select_order_kps(order_id, 5, 2)
     print(processed)
     for it in files:
+        print(it)
+    for it in files_with_types:
+        print(it)
+    for it in order_kps:
         print(it)
 
 

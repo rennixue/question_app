@@ -191,3 +191,43 @@ class QuestionRewriteReq(QuestionFormInputsReq):
 class ExtractedFile(BaseModel):
     file_name: Annotated[str, Field(min_length=1)]
     kps: Annotated[list[str], Field(min_length=1)]
+
+
+class CourseMaterialType(Enum):
+    LectureNote = "lecture_note"
+    Other = "other"
+    Reading = "reading"
+    PastPaper = "past_paper"
+    Syllabus = "syllabus"
+    TutorialQuestion = "tutorial_question"
+
+    @classmethod
+    def from_string(cls, s: str | None) -> "CourseMaterialType":
+        if s is None or s == "":
+            return cls.Other
+        match s:
+            case "lecture_note" | "lecture notes":
+                return cls.LectureNote
+            case "other":
+                return cls.Other
+            case "past_paper" | "past paper":
+                return cls.PastPaper
+            case "reading" | "readings":
+                return cls.Reading
+            case "syllabus" | "unit guide":
+                return cls.Syllabus
+            case "tutorial_question" | "tutorial questions":
+                return cls.TutorialQuestion
+            case _:
+                return cls.Other
+
+
+class ExtractedFileWithType(BaseModel):
+    file_name: Annotated[str, Field(min_length=1)]
+    file_type: CourseMaterialType
+    kps: list[str]
+
+
+class KeyPointWithFreq(BaseModel):
+    name: Annotated[str, Field(min_length=1)]
+    freq: Annotated[int, Field(gt=0)]

@@ -1,3 +1,5 @@
+import json
+from collections import defaultdict
 from collections.abc import Callable, Iterable
 from textwrap import dedent
 
@@ -5,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import bindparam, text
 from sqlalchemy.sql.elements import TextClause
 
-from ..models import ExtractedFile
+from ..models import CourseMaterialType, ExtractedFile, ExtractedFileWithType, KeyPointWithFreq
 
 
 def sql(s: str) -> TextClause:
@@ -51,12 +53,14 @@ class MysqlService:
             rows = cursor.all()
         return [(it[0], it[1]) for it in rows]
 
-    async def select_order_kps(self, order_id: int, file_limit: int, kp_limit: int) -> tuple[bool, list[ExtractedFile]]:
+    async def select_order_kps(
+        self, order_id: int, file_limit: int, kp_limit: int
+    ) -> tuple[bool, list[ExtractedFile], list[ExtractedFileWithType], list[KeyPointWithFreq]]:
         async with self._session_factory() as session:
             cursor = await session.execute(
                 sql("""
-                    SELECT file_name, kp_list FROM db_order_file_kp
-                    WHERE order_id = :order_id AND kp_list IS NOT NULL
+                    SELECT file_name, file_type, kp_list FROM db_order_file_kp
+                    WHERE order_id = :order_id
                     ORDER BY file_name
                     LIMIT :file_limit
                 """),
@@ -64,19 +68,44 @@ class MysqlService:
             )
             rows = cursor.all()
             if len(rows) == 0:
-                cursor = await session.execute(
-                    sql("""
-                    SELECT 1 FROM db_order_file_kp_done
-                    WHERE order_id = :order_id
-                    LIMIT 1
-                """),
-                    {"order_id": order_id},
-                )
-                if cursor.first() is None:
-                    return False, []
+                return False, [], [], []
         files: list[ExtractedFile] = []
-        for file_name, kps_str in rows:
-            if file_name and kps_str:
-                if kps := kps_str.split(","):
-                    files.append(ExtractedFile(file_name=file_name, kps=kps[:kp_limit]))
-        return True, files
+        files_with_types: list[ExtractedFileWithType] = []
+        all_kps: defaultdict[str, tuple[int, float]] = defaultdict(lambda: (0, 0.0))
+        for file_name, file_type_str_or_null, kps_str in rows:
+            if not file_name:
+                continue
+            if file_type_str_or_null:
+                file_type = CourseMaterialType.from_string(file_type_str_or_null)
+            else:
+                file_type = CourseMaterialType.LectureNote
+            kps_str: str | None
+            if kps_str is None:
+                kps: list[str] = []
+            else:
+                if kps_str.startswith("["):
+                    try:
+                        kp_pairs = json.loads(kps_str)
+                    except Exception:
+                        kps = []
+                    else:
+                        kps = [it[0] for it in kp_pairs]
+                        for name, score in kp_pairs:
+                            old_freq, old_score = all_kps[name]
+                            all_kps[name] = (old_freq + 1, old_score + score)
+                else:
+                    if kps_str == "<NOTHING_EXTRACTED>":
+                        kps = []
+                    else:
+                        kps = kps_str.split(",")
+                        for idx, name in enumerate(kps):
+                            old_freq, old_score = all_kps[name]
+                            all_kps[name] = (old_freq + 1, old_score + max(1.0 - idx / 20.0, 0.05))
+            if kps:
+                kps = kps[:kp_limit]
+                files.append(ExtractedFile(file_name=file_name, kps=kps))
+            files_with_types.append(ExtractedFileWithType(file_name=file_name, file_type=file_type, kps=kps))
+        order_kp_triples = [(name, freq, score) for name, (freq, score) in all_kps.items()]
+        order_kp_triples.sort(key=lambda it: it[2], reverse=True)
+        order_kps = [KeyPointWithFreq(name=name, freq=freq) for name, freq, _ in order_kp_triples[:kp_limit]]
+        return True, files, files_with_types, order_kps

@@ -157,10 +157,20 @@ async def post_question_rewrite(
 
 @router.get("/prepared/{course_id}/kps")
 async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None = None, kp_limit: int | None = None):
-    file_limit = file_limit or 30
+    file_limit = file_limit or 100
     kp_limit = kp_limit or 20
-    precessed, files = await mysql.select_order_kps(course_id, file_limit, kp_limit)
-    return {"code": 0, "status": 200, "body": {"course_id": course_id, "precessed": precessed, "files": files}}
+    processed, files, files_with_types, order_kps = await mysql.select_order_kps(course_id, file_limit, kp_limit)
+    return {
+        "code": 0,
+        "status": 200,
+        "body": {
+            "course_id": course_id,
+            "processed": processed,
+            "files": files,
+            "files_with_types": files_with_types,
+            "order_kps": order_kps,
+        },
+    }
 
 
 def encode_chunk(obj: Any) -> str:
