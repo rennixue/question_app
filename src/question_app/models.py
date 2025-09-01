@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
 class QuestionSource(Enum):
     SameOrder = "same_order"
-    SameCourse = "same_course"
+    SameCourse = "same_course"  # also includes same university
     Historical = "historical"
     Imitated = "imitated"
     Generated = "generated"
@@ -56,6 +56,8 @@ class QuestionSource(Enum):
                 return 1
             case QuestionSource.SameCourse:
                 return 2
+            case QuestionSource.Historical:
+                return 4  # TODO check enum value
             case _:
                 return 3
 

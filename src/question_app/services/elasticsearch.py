@@ -94,7 +94,14 @@ class ElasticsearchService:
             )
         resp = await self._knn_search(q_vec, self._make_size(limit), filters, must_nots)
         sources = self._rerank_questions(kp_vec, resp, limit)
-        return [self._make_question(it, QuestionSource.Historical) for it in sources]
+        if university:
+            qs: list[Question] = []
+            for it in sources:
+                q_src = QuestionSource.SameCourse if it["university"] == university else QuestionSource.Historical
+                qs.append(self._make_question(it, q_src))
+            return qs
+        else:
+            return [self._make_question(it, QuestionSource.Historical) for it in sources]
 
     def _make_size(self, limit: int) -> int:
         return min(max(10, limit * 2), limit + 10)
