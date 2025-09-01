@@ -2,6 +2,7 @@ import pytest
 
 from question_app.models import QuestionType
 from question_app.services import (
+    AgentService,
     MysqlService,
     OllamaService,
     QdrantService,
@@ -96,3 +97,11 @@ async def test_question_rewrite(question_rewrite: QuestionRewriteService):
         question_type=QuestionType.Any,
     )
     print(question)
+
+
+@pytest.mark.skip
+async def test_agent_analyze_description(agent: AgentService):
+    exam_kp = "Poisson distribution"
+    context = "compare with t-distribution"
+    output = await agent.analyze_description(exam_kp=exam_kp, context=context)
+    print(output)

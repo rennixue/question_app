@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import bindparam, text
 from sqlalchemy.sql.elements import TextClause
 
-from ..models import CourseMaterialType, ExtractedFile, ExtractedFileWithType, KeyPointWithFreq
+from ..models import CourseMaterialType, ExtractedFile, ExtractedFileWithType, KeyPointNameAndFreq
 
 
 def sql(s: str) -> TextClause:
@@ -55,7 +55,7 @@ class MysqlService:
 
     async def select_order_kps(
         self, order_id: int, file_limit: int, kp_limit: int
-    ) -> tuple[bool, list[ExtractedFile], list[ExtractedFileWithType], list[KeyPointWithFreq]]:
+    ) -> tuple[bool, list[ExtractedFile], list[ExtractedFileWithType], list[KeyPointNameAndFreq]]:
         async with self._session_factory() as session:
             cursor = await session.execute(
                 sql("""
@@ -107,5 +107,5 @@ class MysqlService:
             files_with_types.append(ExtractedFileWithType(file_name=file_name, file_type=file_type, kps=kps))
         order_kp_triples = [(name, freq, score) for name, (freq, score) in all_kps.items()]
         order_kp_triples.sort(key=lambda it: it[2], reverse=True)
-        order_kps = [KeyPointWithFreq(name=name, freq=freq) for name, freq, _ in order_kp_triples[:kp_limit]]
+        order_kps = [KeyPointNameAndFreq(name=name, freq=freq) for name, freq, _ in order_kp_triples[:kp_limit]]
         return True, files, files_with_types, order_kps

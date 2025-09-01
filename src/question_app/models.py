@@ -228,6 +228,13 @@ class ExtractedFileWithType(BaseModel):
     kps: list[str]
 
 
-class KeyPointWithFreq(BaseModel):
+class KeyPointNameAndFreq(BaseModel):
     name: Annotated[str, Field(min_length=1)]
     freq: Annotated[int, Field(gt=0)]
+
+
+class AnalyzeDescriptionOutput(BaseModel):
+    key_concepts: str = ""
+    requirement: str = ""
+    referential_question: str = ""
+    other_info: str = ""

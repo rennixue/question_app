@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
 
-from ..models import KeyPoint, Question, QuestionSource, QuestionType
+from ..models import AnalyzeDescriptionOutput, KeyPoint, Question, QuestionSource, QuestionType
 from .prompt import TemplateManager
 
 
@@ -17,6 +17,7 @@ class AgentService:
         self._tmpl_analyze_chunks = tmpl_mngr.load_template("analyze_chunks")
         self._tmpl_verify_questions = tmpl_mngr.load_template("verify_questions")
         self._tmpl_generate = tmpl_mngr.load_template("generate")
+        self._tmpl_analyze_description = tmpl_mngr.load_template("analyze_description")
 
     async def analyze_chunks(self, query: str, chunks: list[str]) -> list[KeyPoint]:
         user_msg = self._tmpl_analyze_chunks.render(query=query, chunks=chunks)
@@ -65,6 +66,7 @@ class AgentService:
         self,
         exam_kp: str,
         context: str | None,
+        analyzed_context: AnalyzeDescriptionOutput,
         question_type: QuestionType,
         major: str | None,
         course: str | None,
@@ -74,6 +76,7 @@ class AgentService:
         user_msg = self._tmpl_generate.render(
             exam_kp=exam_kp,
             context=context,
+            requirement=analyzed_context.requirement,
             question_type=question_type.to_natural_language(),
             major=major,
             course=course,
@@ -94,6 +97,7 @@ class AgentService:
         self,
         exam_kp: str,
         context: str | None,
+        analyzed_context: AnalyzeDescriptionOutput,
         question_type: QuestionType,
         major: str | None,
         course: str | None,
@@ -103,6 +107,7 @@ class AgentService:
         user_msg = self._tmpl_generate.render(
             exam_kp=exam_kp,
             context=context,
+            requirement=analyzed_context.requirement,
             question_type=question_type.to_natural_language(),
             major=major,
             course=course,
@@ -121,6 +126,17 @@ class AgentService:
                 pass
         content, q_type = self._parse_question(asst_msg)
         return Question(content=content, type=q_type, source=QuestionSource.Rewritten)
+
+    async def analyze_description(self, *, exam_kp: str, context: str) -> AnalyzeDescriptionOutput:
+        user_msg = self._tmpl_analyze_description.render(query=exam_kp, description=context)
+        asst_msg = ""
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 4096}) as result:
+            async for asst_msg in result.stream_text():
+                pass
+        output = self._parse_analyze_description(asst_msg)
+        if output is None:
+            output = AnalyzeDescriptionOutput()
+        return output
 
     def _parse_entity(self, s: str) -> KeyPoint | None:
         if m := re.search(r"(?s)<name>(.+?)</name>", s):
@@ -151,3 +167,12 @@ class AgentService:
         else:
             q_type = "open"
         return content, QuestionType.from_value(q_type)
+
+    def _parse_analyze_description(self, s: str) -> AnalyzeDescriptionOutput | None:
+        if m := re.search(r"(?s)```json\n(.+?)\n```", s):
+            json_str = m.group(1).strip()
+            try:
+                return AnalyzeDescriptionOutput.model_validate_json(json_str)
+            except Exception:
+                pass
+        return None

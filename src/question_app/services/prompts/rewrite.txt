@@ -6,6 +6,7 @@ You are an academic tutor.
 
 You wrote an exam question for another academic tutor according to the background.
 However, he is not satisfied with yours and asks for a rewrite according to his prompt.
+Regardless of what languange he uses, the question you write must be in English.
 
 For the rewritten question, output its content and type.
 The question type must be chosen from one of: calculation, multiple choice, open, other.

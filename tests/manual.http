@@ -29,13 +29,13 @@ POST http://localhost:8000/api/question/generate
 }
 
 ###
-POST http://localhost:8000/api/question/generate
+POST http://localhost:8000/api/question/generate-stream
 
 {
   "task_id": 123,
   "course_id": 614639,
   "exam_kp": "t-distribution",
-  "context": "compare with normal distribution",
+  "context": "If a distribution is a normal distribution, what statistic of it is related to a t-distribution?",
   "question_type": 0,
   "major_name": "Business Analytics",
   "course_name": "Statistical Methods for Business",

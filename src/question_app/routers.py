@@ -20,7 +20,14 @@ from .dependencies import (
     QuestionRewriteDep,
     QuestionSearchDep,
 )
-from .models import Question, QuestionGenerateReq, QuestionRewriteReq, QuestionSource, QuestionType
+from .models import (
+    AnalyzeDescriptionOutput,
+    Question,
+    QuestionGenerateReq,
+    QuestionRewriteReq,
+    QuestionSource,
+    QuestionType,
+)
 from .services.question import reorder_choices
 
 logger = logging.getLogger(__name__)
@@ -187,11 +194,18 @@ async def iter_chunks(
 ):
     try:
         yield encode_chunk({"done": False, "message": "开始处理。\n"})
+        # step 0: analyze description
+        if r.context:
+            analyzed_context = await agent.analyze_description(exam_kp=r.exam_kp, context=r.context)
+            logger.debug("analyzed_context: %r", analyzed_context)
+            yield encode_chunk({"done": False, "message": "理解描述完成。\n"})
+        else:
+            analyzed_context = AnalyzeDescriptionOutput()
         # step 1: search questions
         async with question_search._elasticsearch:  # type: ignore
             qs_same_course, qs_historical = await question_search.find_questions(
                 r.exam_kp,
-                r.context,
+                analyzed_context.key_concepts or r.context,
                 r.question_type,
                 r.major_name,
                 r.course_name,
@@ -205,8 +219,8 @@ async def iter_chunks(
         # step 2: query chunks
         kp = r.exam_kp.strip().lower()
         text = f"Definition or explanation of {kp}."
-        if r.context:
-            text += f"\nKnowledge of {kp} related to the following context:\n{r.context.strip()}"
+        if it := (analyzed_context.key_concepts or r.context):
+            text += f"\nKnowledge of {kp} related to the following context:\n{it.strip()}"
         vec = await ollama.embed_one(text)
         pairs = await qdrant.query_chunks(kp, vec, r.course_id, 8)
         logger.debug("len(chunks)=%d", len(pairs))
@@ -226,7 +240,7 @@ async def iter_chunks(
         qs_generate: list[Question] = []
         chunks: list[str] = []
         async for chunk in agent.generate_stream(
-            r.exam_kp, r.context, r.question_type, r.major_name, r.course_name, key_points, 10
+            r.exam_kp, r.context, analyzed_context, r.question_type, r.major_name, r.course_name, key_points, 10
         ):
             yield encode_chunk({"done": False, "message": chunk})
             chunks.append(chunk)

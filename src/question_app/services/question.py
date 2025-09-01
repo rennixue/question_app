@@ -2,7 +2,7 @@ import logging
 import random
 import re
 
-from ..models import Question, QuestionType
+from ..models import AnalyzeDescriptionOutput, Question, QuestionType
 from .agent import AgentService
 from .elasticsearch import ElasticsearchService
 from .mysql import MysqlService
@@ -191,7 +191,9 @@ class QuestionGenerateService:
         relevances = ["weak", "medium", "strong"]
         key_points.sort(key=lambda it: relevances.index(it.relevance), reverse=True)
         key_points = [it for it in key_points if it.relevance != "weak"]
-        questions = await self._agent.generate(exam_kp, context, question_type, major, course_name, key_points, num)
+        questions = await self._agent.generate(
+            exam_kp, context, AnalyzeDescriptionOutput(), question_type, major, course_name, key_points, num
+        )
         for it in questions:
             if it.type == QuestionType.MultipleChoice:
                 it.content = reorder_choices(it.content)
