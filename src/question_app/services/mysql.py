@@ -59,7 +59,7 @@ class MysqlService:
         async with self._session_factory() as session:
             cursor = await session.execute(
                 sql("""
-                    SELECT file_name, file_type, kp_list FROM db_order_file_kp
+                    SELECT file_name, file_new_type, kp_list FROM db_order_file_kp
                     WHERE order_id = :order_id
                     ORDER BY file_name
                     LIMIT :file_limit
@@ -75,10 +75,10 @@ class MysqlService:
         for file_name, file_type_str_or_null, kps_str in rows:
             if not file_name:
                 continue
-            if file_type_str_or_null:
-                file_type = CourseMaterialType.from_string(file_type_str_or_null)
-            else:
+            if file_type_str_or_null is None:
                 file_type = CourseMaterialType.LectureNote
+            else:
+                file_type = CourseMaterialType.from_string(file_type_str_or_null)
             kps_str: str | None
             if kps_str is None:
                 kps: list[str] = []
