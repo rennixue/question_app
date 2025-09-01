@@ -76,6 +76,12 @@ async def do_generate(
     return questions
 
 
+async def empty_generate(wait_secs: float) -> list[Question]:
+    await asyncio.sleep(wait_secs)
+    logger.debug("empty generate")
+    return []
+
+
 async def wrapped_generate(
     max_exec_secs: float,
     req_body: QuestionGenerateReq,
@@ -84,7 +90,8 @@ async def wrapped_generate(
     question_imitate: QuestionImitateDep,
     question_search: QuestionSearchDep,
 ):
-    task = asyncio.create_task(do_generate(req_body, question_generate, question_imitate, question_search))
+    # task = asyncio.create_task(do_generate(req_body, question_generate, question_imitate, question_search))
+    task = asyncio.create_task(empty_generate(170.0))
     try:
         questions = await asyncio.wait_for(task, max_exec_secs)
     except asyncio.TimeoutError:
