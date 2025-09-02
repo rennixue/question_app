@@ -56,8 +56,8 @@ class QuestionSource(Enum):
                 return 1
             case QuestionSource.SameCourse:
                 return 2
-            case QuestionSource.Historical:
-                return 4  # TODO check enum value
+            # case QuestionSource.Historical:
+            #     return 4
             case _:
                 return 3
 
