@@ -167,6 +167,15 @@ async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None 
     file_limit = file_limit or 100
     kp_limit = kp_limit or 20
     processed, files, files_with_types, order_kps = await mysql.select_order_kps(course_id, file_limit, kp_limit)
+    new_files_with_types = [
+        {
+            "file_type": file_type,
+            "files": [
+                {"file_name": it.file_name, "kps": it.kps} for it in files_with_types if it.file_type == file_type
+            ],
+        }
+        for file_type in set(it.file_type for it in files_with_types)
+    ]
     return {
         "code": 0,
         "status": 200,
@@ -174,7 +183,7 @@ async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None 
             "course_id": course_id,
             "processed": processed,
             "files": files,
-            "files_with_types": files_with_types,
+            "files_with_types": new_files_with_types,
             "order_kps": order_kps,
         },
     }
