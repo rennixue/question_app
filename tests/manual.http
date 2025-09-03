@@ -1,5 +1,5 @@
 ###
-POST http://localhost:8000/api/question/generate
+POST http://localhost:8000/api/question/generate-stream
 
 {
   "task_id": 123456789,

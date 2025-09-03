@@ -1,3 +1,4 @@
+import re
 import warnings
 from types import TracebackType
 from typing import Any
@@ -160,9 +161,12 @@ class ElasticsearchService:
         return [it[0] for it in pairs[:limit]]
 
     def _make_question(self, d: dict[str, Any], src: QuestionSource) -> Question:
-        meta_info = "{} - {} - {}".format(
-            d.get("university") or "/", d.get("major") or "/", d.get("course_code") or "/"
-        )
+        parts: list[str] = []
+        if s := d.get("university"):
+            parts.append(re.sub(r"\(.+\)", "", s).strip())
+        if s := d.get("major"):
+            parts.append(s)
+        meta_info = "\u00b7".join(parts)
         q_type = QuestionType.from_elasticsearch_keyword(d.get("question_type"))
         question_id = d.get("question_id")
         if isinstance(question_id, int):
