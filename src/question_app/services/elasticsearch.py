@@ -94,12 +94,16 @@ class ElasticsearchService:
             )
         resp = await self._knn_search(q_vec, self._make_size(limit), filters, must_nots)
         sources = self._rerank_questions(kp_vec, resp, limit)
+        # NOTE this is intentional
         if university:
-            qs: list[Question] = []
+            qs1: list[Question] = []
+            qs2: list[Question] = []
             for it in sources:
-                q_src = QuestionSource.SameCourse if it["university"] == university else QuestionSource.Historical
-                qs.append(self._make_question(it, q_src))
-            return qs
+                if it["university"] == university:
+                    qs1.append(self._make_question(it, QuestionSource.SameCourse))
+                else:
+                    qs2.append(self._make_question(it, QuestionSource.Historical))
+            return [*qs1, *qs2]
         else:
             return [self._make_question(it, QuestionSource.Historical) for it in sources]
 
