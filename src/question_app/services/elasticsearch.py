@@ -163,7 +163,9 @@ class ElasticsearchService:
     def _make_question(self, d: dict[str, Any], src: QuestionSource) -> Question:
         parts: list[str] = []
         if s := d.get("university"):
-            parts.append(re.sub(r"\(.+\)", "", s).strip())
+            s = re.sub(r"\(.+?\)", "", s).strip()
+            s = re.sub(r"\uff08.+?\uff09", "", s).strip()
+            parts.append(s)
         if s := d.get("major"):
             parts.append(s)
         meta_info = "\u00b7".join(parts)
