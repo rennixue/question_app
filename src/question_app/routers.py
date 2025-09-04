@@ -174,7 +174,7 @@ async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None 
                 {"file_name": it.file_name, "kps": it.kps} for it in files_with_types if it.file_type == file_type
             ],
         }
-        for file_type in set(it.file_type for it in files_with_types)
+        for file_type in sorted(set(it.file_type for it in files_with_types), key=lambda it: it.to_int())
     ]
     return {
         "code": 0,

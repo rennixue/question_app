@@ -194,12 +194,13 @@ class ExtractedFile(BaseModel):
 
 
 class CourseMaterialType(Enum):
-    LectureNote = "lecture_note"
-    Other = "other"
-    Reading = "reading"
-    PastPaper = "past_paper"
-    Syllabus = "syllabus"
-    TutorialQuestion = "tutorial_question"
+    # required by frontend direct use
+    LectureNote = "Lecture Notes"
+    Other = "Other"
+    Reading = "Reading"
+    PastPaper = "Past paper"
+    Syllabus = "Syllabus"
+    TutorialQuestion = "Tutorial question"
 
     @classmethod
     def from_string(cls, s: str | None) -> "CourseMaterialType":
@@ -220,6 +221,23 @@ class CourseMaterialType(Enum):
                 return cls.TutorialQuestion
             case _:
                 return cls.Other
+
+    def to_int(self) -> int:
+        match self:
+            case CourseMaterialType.LectureNote:
+                return 1
+            case CourseMaterialType.Syllabus:
+                return 2
+            case CourseMaterialType.PastPaper:
+                return 3
+            case CourseMaterialType.TutorialQuestion:
+                return 4
+            case CourseMaterialType.Reading:
+                return 5
+            case CourseMaterialType.Other:
+                return 6
+            case _:
+                assert_never()
 
 
 class ExtractedFileWithType(BaseModel):
