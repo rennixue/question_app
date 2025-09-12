@@ -1,4 +1,6 @@
 import json
+import logging
+import random
 import re
 from collections.abc import AsyncIterator
 
@@ -6,6 +8,24 @@ from pydantic_ai import Agent
 
 from ..models import AnalyzeDescriptionOutput, KeyPoint, Question, QuestionSource, QuestionType
 from .prompt import TemplateManager
+
+logger = logging.getLogger(__name__)
+
+
+def reorder_choices(text: str) -> str:
+    try:
+        s = text.strip()
+        parts = re.split(r"(?m)^[A-Z]\) ", s)
+        if len(parts) <= 3 or len(parts) >= 8:
+            return text
+        stem = parts[0]  # last char is \n
+        base_options = [it.strip() for it in parts[1:]]
+        random.shuffle(base_options)
+        new_options = [chr(ord("A") + i) + ") " + it for i, it in enumerate(base_options)]
+        return stem + "\n".join(new_options)
+    except Exception as exc:
+        logger.error("error when reordering: %r, text=%r", exc, text)
+        return text
 
 
 class AgentService:
@@ -17,6 +37,7 @@ class AgentService:
         self._tmpl_analyze_chunks = tmpl_mngr.load_template("analyze_chunks")
         self._tmpl_verify_questions = tmpl_mngr.load_template("verify_questions")
         self._tmpl_generate = tmpl_mngr.load_template("generate")
+        self._tmpl_generate_second = tmpl_mngr.load_template("generate_second")
         self._tmpl_analyze_description = tmpl_mngr.load_template("analyze_description")
 
     async def analyze_chunks(self, query: str, chunks: list[str]) -> list[KeyPoint]:
@@ -41,6 +62,8 @@ class AgentService:
     async def verify_questions(
         self, questions: list[Question], exam_kp: str, key_points: list[KeyPoint]
     ) -> list[Question]:
+        if not questions:
+            return []
         user_msg = self._tmpl_verify_questions.render(
             kp=exam_kp, key_points=key_points, questions=[it.content[:1000] for it in questions]
         )
@@ -117,6 +140,86 @@ class AgentService:
         async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
             async for asst_msg in result.stream_text(delta=True, debounce_by=0.2):
                 yield asst_msg
+
+    async def generate_stream_first(
+        self,
+        exam_kp: str,
+        context: str | None,
+        analyzed_context: AnalyzeDescriptionOutput,
+        question_type: QuestionType,
+        major: str | None,
+        course: str | None,
+        key_points: list[KeyPoint],
+        number: int,
+    ) -> AsyncIterator[list[Question]]:
+        user_msg = self._tmpl_generate.render(
+            exam_kp=exam_kp,
+            context=context,
+            requirement=analyzed_context.requirement,
+            question_type=question_type.to_natural_language(),
+            major=major,
+            course=course,
+            key_points=key_points,
+            number=number,
+        )
+        offset = 0
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+            async for asst_msg in result.stream_text(delta=False, debounce_by=1.0):
+                pairs: list[tuple[str, QuestionType]] = []
+                for it in re.finditer(r"(?s)<question>(.+?)</question>", asst_msg):
+                    # NOTE whether question_type equals or not, append it
+                    pairs.append(self._parse_question(it.group()))
+                new_questions: list[Question] = []
+                for q_content, q_type in pairs[offset:]:
+                    if question_type != QuestionType.Any and q_type != question_type:
+                        continue
+                    if q_type == QuestionType.MultipleChoice:
+                        q_content = reorder_choices(q_content)
+                    new_questions.append(Question(content=q_content, type=q_type, source=QuestionSource.Generated))
+                offset = len(pairs)
+                yield new_questions
+
+    async def generate_stream_second(
+        self,
+        exam_kp: str,
+        context: str | None,
+        analyzed_context: AnalyzeDescriptionOutput,
+        question_type: QuestionType,
+        major: str | None,
+        course: str | None,
+        key_points: list[KeyPoint],
+        known_questions: list[Question],
+        num_min: int,
+        num_max: int,
+    ) -> AsyncIterator[list[Question]]:
+        user_msg = self._tmpl_generate_second.render(
+            exam_kp=exam_kp,
+            context=context,
+            requirement=analyzed_context.requirement,
+            question_type=question_type.to_natural_language(),
+            major=major,
+            course=course,
+            key_points=key_points,
+            known_questions=known_questions,
+            num_min=num_min,
+            num_max=num_max,
+        )
+        offset = 0
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+            async for asst_msg in result.stream_text(delta=False, debounce_by=1.0):
+                pairs: list[tuple[str, QuestionType]] = []
+                for it in re.finditer(r"(?s)<question>(.+?)</question>", asst_msg):
+                    # NOTE whether question_type equals or not, append it
+                    pairs.append(self._parse_question(it.group()))
+                new_questions: list[Question] = []
+                for q_content, q_type in pairs[offset:]:
+                    if question_type != QuestionType.Any and q_type != question_type:
+                        continue
+                    if q_type == QuestionType.MultipleChoice:
+                        q_content = reorder_choices(q_content)
+                    new_questions.append(Question(content=q_content, type=q_type, source=QuestionSource.Generated))
+                offset = len(pairs)
+                yield new_questions
 
     async def rewrite(self, *, background: str, prompt: str, question: str) -> Question:
         user_msg = self._tmpl_rewrite.render(background=background, prompt=prompt, question=question)

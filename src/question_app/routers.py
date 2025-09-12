@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from asyncio import Task, TaskGroup
 from typing import Any
 
@@ -22,11 +23,13 @@ from .dependencies import (
 )
 from .models import (
     AnalyzeDescriptionOutput,
+    KeyPoint,
     Question,
     QuestionGenerateReq,
     QuestionRewriteReq,
     QuestionSource,
     QuestionType,
+    StreamBlock,
 )
 from .services.question import reorder_choices
 
@@ -62,9 +65,22 @@ async def do_generate(
     question_search: QuestionSearchDep,
 ) -> list[Question]:
     async with question_search._elasticsearch:  # type: ignore
-        qs_same_course, qs_historical = await question_search.find_questions(
-            r.exam_kp, r.context, r.question_type, r.major_name, r.course_name, r.course_code, r.university_name, 10, 20
+        aiterator = question_search.find_questions(
+            r.exam_kp,
+            r.context,
+            r.question_type,
+            r.major_name,
+            r.course_name,
+            r.course_code,
+            r.university_name,
+            10,
+            10,
+            20,
         )
+        qs_same_course = await anext(aiterator)
+        qs_same_university = await anext(aiterator)
+        qs_historical = await anext(aiterator)
+        qs_historical = [*qs_same_university, *qs_historical]
     logger.debug(f"{len(qs_same_course)=}, {len(qs_historical)=}")
     async with asyncio.TaskGroup() as group:
         task_verify = group.create_task(question_imitate.verify(qs_historical, r.course_id, r.exam_kp, r.context))
@@ -212,17 +228,22 @@ async def iter_chunks(
             analyzed_context = AnalyzeDescriptionOutput()
         # step 1: search questions
         async with question_search._elasticsearch:  # type: ignore
-            qs_same_course, qs_historical = await question_search.find_questions(
+            aiterator = question_search.find_questions(
                 r.exam_kp,
-                analyzed_context.key_concepts or r.context,
+                r.context,
                 r.question_type,
                 r.major_name,
                 r.course_name,
                 r.course_code,
                 r.university_name,
                 10,
+                10,
                 20,
             )
+            qs_same_course = await anext(aiterator)
+            qs_same_university = await anext(aiterator)
+            qs_historical = await anext(aiterator)
+            qs_historical = [*qs_same_university, *qs_historical]
         logger.debug(f"{len(qs_same_course)=}, {len(qs_historical)=}")
         yield encode_chunk({"done": False, "message": "搜索真题完成。\n"})
         # step 2: query chunks
@@ -303,6 +324,8 @@ async def iter_chunks_test(req: Request):
             yield encode_chunk({"done": False, "message": f"{k}: "})
             await asyncio.sleep(0.2)
             yield encode_chunk({"done": False, "message": f"{v}\n"})
+    except asyncio.CancelledError as exc:
+        logger.error(repr(exc))
     finally:
         yield encode_chunk({"done": True, "message": ""})
 
@@ -313,3 +336,238 @@ async def iter_chunks_test(req: Request):
 )
 async def route_stream_test(req: Request):
     return StreamingResponse(iter_chunks_test(req), media_type="text/event-stream")
+
+
+def encode_block(block: StreamBlock) -> str:
+    return "data: " + block.model_dump_json() + "\n\n"
+
+
+async def extract_key_points(
+    r: QuestionGenerateReq,
+    agent: AgentDep,
+    ollama: OllamaDep,
+    qdrant: QdrantDep,
+) -> tuple[AnalyzeDescriptionOutput, list[KeyPoint]]:
+    # step 1: analyze context
+    if r.context:
+        analyzed_context = await agent.analyze_description(exam_kp=r.exam_kp, context=r.context)
+        logger.debug("analyzed_context: %r", analyzed_context)
+    else:
+        analyzed_context = AnalyzeDescriptionOutput()
+    # step 2: retrieve chunks
+    kp = r.exam_kp.strip().lower()
+    text = f"Definition or explanation of {kp}."
+    if it := (analyzed_context.key_concepts or r.context):
+        text += f"\nKnowledge of {kp} related to the following context:\n{it.strip()}"
+    vec = await ollama.embed_one(text)
+    pairs = await qdrant.query_chunks(kp, vec, r.course_id, 8)
+    logger.debug("len(chunks)=%d", len(pairs))
+    # step 3: generate key points
+    key_points = await agent.analyze_chunks(kp, [it[1] for it in pairs])
+    relevances = ["weak", "medium", "strong"]
+    key_points.sort(key=lambda it: relevances.index(it.relevance), reverse=True)
+    key_points = [it for it in key_points if it.relevance != "weak"]
+    return analyzed_context, key_points
+
+
+async def iter_blocks(
+    request: Request,
+    r: QuestionGenerateReq,
+    callback: CallbackDep,
+    agent: AgentDep,
+    ollama: OllamaDep,
+    qdrant: QdrantDep,
+    question_search: QuestionSearchDep,
+):
+    time_start = time.perf_counter()
+    questions: list[Question] = []
+    try:
+        knowledge_task = asyncio.create_task(extract_key_points(r, agent, ollama, qdrant))
+        # step 1: search questions
+        async with question_search._elasticsearch:  # type: ignore
+            aiterator = question_search.find_questions(
+                r.exam_kp,
+                r.context,
+                r.question_type,
+                r.major_name,
+                r.course_name,
+                r.course_code,
+                r.university_name,
+                20,
+                20,
+                20,
+            )
+            # step 1.1: search same course questions
+            time_same_course_start = time.perf_counter()
+            yield encode_block(StreamBlock(q_src=QuestionSource.SameCourse, status="start"))
+            count_same_course = 0
+            try:
+                qs_same_course = await anext(aiterator)
+            except Exception as exc:
+                logger.error("fail to search same course: %r", exc)
+            else:
+                if qs_same_course:
+                    yield encode_block(
+                        StreamBlock(q_src=QuestionSource.SameCourse, status="progress", questions=qs_same_course)
+                    )
+                    count_same_course = len(qs_same_course)
+                    questions.extend(qs_same_course)
+                logger.debug(f"{len(qs_same_course)=}")
+            yield encode_block(
+                StreamBlock(
+                    q_src=QuestionSource.SameCourse,
+                    status="finish",
+                    count=count_same_course,
+                    time=time.perf_counter() - time_same_course_start,
+                )
+            )
+            # step 1.2: search same university questions
+            time_same_university_start = time.perf_counter()
+            yield encode_block(StreamBlock(q_src=QuestionSource.SameUniversity, status="start"))
+            try:
+                analyzed_context, key_points = await knowledge_task
+            except Exception as exc:
+                logger.error("fail to fetch knowledge: %r", exc)
+                analyzed_context, key_points = AnalyzeDescriptionOutput(), []
+            count_same_university = 0
+            try:
+                qs_same_university = await anext(aiterator)
+            except Exception as exc:
+                logger.error("fail to search same university: %r", exc)
+            else:
+                if qs_same_university:
+                    qs_same_university_verified = await agent.verify_questions(
+                        qs_same_university, r.exam_kp, key_points
+                    )
+                    if qs_same_university_verified:
+                        yield encode_block(
+                            StreamBlock(
+                                q_src=QuestionSource.SameUniversity,
+                                status="progress",
+                                questions=qs_same_university_verified,
+                            )
+                        )
+                        count_same_university = len(qs_same_university_verified)
+                        questions.extend(qs_same_university_verified)
+                logger.debug(f"{len(qs_same_university)=}, {count_same_university=}")
+            yield encode_block(
+                StreamBlock(
+                    q_src=QuestionSource.SameUniversity,
+                    status="finish",
+                    count=count_same_university,
+                    time=time.perf_counter() - time_same_university_start,
+                )
+            )
+            # step 1.3: search other university questions
+            time_historical_start = time.perf_counter()
+            yield encode_block(StreamBlock(q_src=QuestionSource.Historical, status="start"))
+            count_historical = 0
+            try:
+                qs_historical = await anext(aiterator)
+            except Exception as exc:
+                logger.error("fail to search same course: %r", exc)
+            else:
+                if qs_historical:
+                    qs_historical_verified = await agent.verify_questions(qs_historical, r.exam_kp, key_points)
+                    if qs_historical_verified:
+                        yield encode_block(
+                            StreamBlock(
+                                q_src=QuestionSource.Historical,
+                                status="progress",
+                                questions=qs_historical_verified,
+                            )
+                        )
+                        count_historical = len(qs_historical_verified)
+                        questions.extend(qs_historical_verified)
+                logger.debug(f"{len(qs_historical)=}, {count_historical=}")
+            yield encode_block(
+                StreamBlock(
+                    q_src=QuestionSource.Historical,
+                    status="finish",
+                    count=count_historical,
+                    time=time.perf_counter() - time_historical_start,
+                )
+            )
+
+        # step 2: generate questions
+        time_gen_start = time.perf_counter()
+        count_gen = 0
+        qs_gen: list[Question] = []
+        # step 2.1: generate questions first batch
+        yield encode_block(StreamBlock(q_src=QuestionSource.Generated, status="start"))
+        async for some_questions in agent.generate_stream_first(
+            r.exam_kp, r.context, analyzed_context, r.question_type, r.major_name, r.course_name, key_points, 10
+        ):
+            if some_questions:
+                yield encode_block(
+                    StreamBlock(q_src=QuestionSource.Generated, status="progress", questions=some_questions)
+                )
+                count_gen += len(some_questions)
+                questions.extend(some_questions)
+                qs_gen.extend(some_questions)
+        yield encode_block(
+            StreamBlock(
+                q_src=QuestionSource.Generated,
+                status="checkpoint",
+                count=count_gen,
+                time=time.perf_counter() - time_gen_start,
+            )
+        )
+        # step 2.2: generate questions second batch
+        async for some_questions in agent.generate_stream_second(
+            r.exam_kp,
+            r.context,
+            analyzed_context,
+            r.question_type,
+            r.major_name,
+            r.course_name,
+            key_points,
+            qs_gen.copy(),
+            10,
+            20,
+        ):
+            if some_questions:
+                yield encode_block(
+                    StreamBlock(q_src=QuestionSource.Generated, status="progress", questions=some_questions)
+                )
+                count_gen += len(some_questions)
+                questions.extend(some_questions)
+                qs_gen.extend(some_questions)
+        yield encode_block(
+            StreamBlock(
+                q_src=QuestionSource.Generated,
+                status="finish",
+                count=count_gen,
+                time=time.perf_counter() - time_gen_start,
+            )
+        )
+        logger.debug(f"{len(qs_gen)=}")
+
+        # step 3: notify callback
+        await callback.notify_generate_ok(r.task_id, questions)
+    except Exception as exc:
+        logger.error("generate error: %r", exc)
+        await callback.notify_generate_err(r.task_id, "error when generate")
+    except asyncio.CancelledError:  # subclass of BaseException
+        logger.warning("request cancelled")
+        await callback.notify_generate_ok(r.task_id, questions, "request cancelled")
+    finally:
+        time_total = time.perf_counter() - time_start
+        logger.debug(f"total count: {len(questions)}, total time: {time_total}")
+        yield encode_block(StreamBlock(done=True, count=len(questions), time=time_total))
+
+
+@router.post("/question/generate-blocks")
+async def post_question_generate_blocks(
+    req: Request,
+    req_body: QuestionGenerateReq,
+    callback: CallbackDep,
+    agent: AgentDep,
+    ollama: OllamaDep,
+    qdrant: QdrantDep,
+    question_search: QuestionSearchDep,
+):
+    logger.debug("request body: %r", req_body)
+    return StreamingResponse(
+        iter_blocks(req, req_body, callback, agent, ollama, qdrant, question_search), media_type="text/event-stream"
+    )

@@ -62,6 +62,33 @@ class ElasticsearchService:
         sources = self._rerank_questions(kp_vec, resp, limit)
         return [self._make_question(it, QuestionSource.SameCourse) for it in sources]
 
+    async def search_questions_same_university(
+        self,
+        *,
+        kp: str,
+        kp_vec: list[float],
+        q_vec: list[float],
+        q_type: str | None,
+        majors: list[str] | None,
+        course_code: str | None,
+        university: str,
+        limit: int,
+    ) -> list[Question]:
+        filters: list[dict[str, Any]] = [
+            {"match_phrase": {"content": {"query": kp, "slop": 0}}},
+            {"term": {"university.raw": {"value": university}}},
+        ]
+        if q_type:
+            filters.append({"term": {"question_type": q_type}})
+        if majors:
+            filters.append({"terms": {"major.raw": majors}})
+        must_nots: list[dict[str, Any]] = []
+        if course_code:
+            must_nots.append({"term": {"course_code": {"value": course_code}}})
+        resp = await self._knn_search(q_vec, self._make_size(limit), filters, must_nots)
+        sources = self._rerank_questions(kp_vec, resp, limit)
+        return [self._make_question(it, QuestionSource.SameUniversity) for it in sources]
+
     async def search_questions_historical(
         self,
         *,
@@ -82,31 +109,34 @@ class ElasticsearchService:
         if majors:
             filters.append({"terms": {"major.raw": majors}})
         must_nots: list[dict[str, Any]] = []
-        if course_code and university:
-            must_nots.append(
-                {
-                    "bool": {
-                        "must": [
-                            {"term": {"course_code": {"value": course_code}}},
-                            {"term": {"university.raw": {"value": university}}},
-                        ]
-                    }
-                }
-            )
+        # if course_code and university:
+        #     must_nots.append(
+        #         {
+        #             "bool": {
+        #                 "must": [
+        #                     {"term": {"course_code": {"value": course_code}}},
+        #                     {"term": {"university.raw": {"value": university}}},
+        #                 ]
+        #             }
+        #         }
+        #     )
+        if university:
+            must_nots.append({"term": {"university.raw": {"value": university}}})
         resp = await self._knn_search(q_vec, self._make_size(limit), filters, must_nots)
         sources = self._rerank_questions(kp_vec, resp, limit)
         # NOTE this is intentional
-        if university:
-            qs1: list[Question] = []
-            qs2: list[Question] = []
-            for it in sources:
-                if it["university"] == university:
-                    qs1.append(self._make_question(it, QuestionSource.SameCourse))
-                else:
-                    qs2.append(self._make_question(it, QuestionSource.Historical))
-            return [*qs1, *qs2]
-        else:
-            return [self._make_question(it, QuestionSource.Historical) for it in sources]
+        # if university:
+        #     qs1: list[Question] = []
+        #     qs2: list[Question] = []
+        #     for it in sources:
+        #         if it["university"] == university:
+        #             qs1.append(self._make_question(it, QuestionSource.SameCourse))
+        #         else:
+        #             qs2.append(self._make_question(it, QuestionSource.Historical))
+        #     return [*qs1, *qs2]
+        # else:
+        #     return [self._make_question(it, QuestionSource.Historical) for it in sources]
+        return [self._make_question(it, QuestionSource.Historical) for it in sources]
 
     def _make_size(self, limit: int) -> int:
         return min(max(10, limit * 2), limit + 10)
@@ -161,18 +191,28 @@ class ElasticsearchService:
         return [it[0] for it in pairs[:limit]]
 
     def _make_question(self, d: dict[str, Any], src: QuestionSource) -> Question:
-        parts: list[str] = []
-        if s := d.get("university"):
-            s = re.sub(r"\(.+?\)", "", s).strip()
-            s = re.sub(r"\uff08.+?\uff09", "", s).strip()
-            parts.append(s)
-        if s := d.get("major"):
-            parts.append(s)
-        meta_info = "\u00b7".join(parts)
+        meta_info = self._make_question_meta_info(d, src)
         q_type = QuestionType.from_elasticsearch_keyword(d.get("question_type"))
         question_id = d.get("question_id")
         if isinstance(question_id, int):
             q_id = UUID(int=question_id)
         else:
             q_id = uuid4()
-        return Question(id=q_id, content=d.get("content", ""), type=q_type, source=src, meta_info=meta_info)
+        return Question(id=q_id, content=d.get("content") or "", type=q_type, source=src, meta_info=meta_info)
+
+    def _make_question_meta_info(self, d: dict[str, Any], src: QuestionSource) -> str:
+        match src:
+            case QuestionSource.SameCourse:
+                return "Past Paper"
+            case QuestionSource.SameUniversity:
+                return d.get("course_code") or ""  # course_code can be null when stored
+            case QuestionSource.Historical:
+                if university := d.get("university"):
+                    university = re.sub(r"\(.+?\)", "", university).strip()
+                    university = re.sub(r"\uff08.+?\uff09", "", university).strip()
+                else:
+                    university = ""
+                course_name = d.get("course_name", "")
+                return "-".join(it for it in [university, course_name] if it)
+            case _:
+                return ""

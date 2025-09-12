@@ -1,6 +1,6 @@
 import pytest
 
-from question_app.models import QuestionType
+from question_app.models import QuestionSource, QuestionType, StreamBlock
 from question_app.services import (
     AgentService,
     MysqlService,
@@ -45,27 +45,53 @@ async def test_question_search_find_majors(question_search: QuestionSearchServic
 
 @pytest.mark.skip
 async def test_question_search_find_questions(question_search: QuestionSearchService):
-    questions_same_course, questions_historical = await question_search.find_questions(
-        exam_kp="t-distribution",
-        context="compare with normal distribution",
-        question_type=QuestionType.MultipleChoice,
-        major_name="Business Analytics",
-        course_name="Statistical Methods for Business",
+    # aiterator = question_search.find_questions(
+    #     exam_kp="t-distribution",
+    #     context="compare with normal distribution",
+    #     question_type=QuestionType.MultipleChoice,
+    #     major_name="Business Analytics",
+    #     course_name="Statistical Methods for Business",
+    #     course_code="MSCI212",
+    #     university="兰卡斯特大学(Lancaster University)",
+    #     limit_same_course=2,
+    #     limit_same_university=2,
+    #     limit_historical=2,
+    # )
+    aiterator = question_search.find_questions(
+        exam_kp="distribution",
+        context=None,
+        question_type=QuestionType.Any,
+        major_name="Statistics",
+        course_name=None,
         course_code="MSCI212",
         university="兰卡斯特大学(Lancaster University)",
-        limit_same_course=2,
-        limit_historical=2,
+        limit_same_course=20,
+        limit_same_university=20,
+        limit_historical=20,
     )
-    assert len(questions_same_course) == 2
-    assert len(questions_historical) == 0
+    qs_same_course = await anext(aiterator)
+    qs_same_university = await anext(aiterator)
+    qs_historical = await anext(aiterator)
+    assert len(qs_same_course) > 0
+    assert len(qs_same_university) > 0
+    assert len(qs_historical) > 0
+    for it in qs_same_course:
+        assert it.source == QuestionSource.SameCourse
+        print(it.meta_info)
+    for it in qs_same_university:
+        assert it.source == QuestionSource.SameUniversity
+        print(it.meta_info)
+    for it in qs_historical:
+        assert it.source == QuestionSource.Historical
+        print(it.meta_info)
 
 
 @pytest.mark.skip
 async def test_question_verify(question_search: QuestionSearchService, question_imitate: QuestionImitateService):
-    qs_same_course, qs_historical = await question_search.find_questions(
-        "hypothesis test", None, QuestionType.Any, None, None, None, None, 0, 20
-    )
-    print(len(qs_same_course), len(qs_historical))
+    aiterator = question_search.find_questions("hypothesis test", None, QuestionType.Any, None, None, None, None, 0, 20)
+    _ = await anext(aiterator)
+    _ = await anext(aiterator)
+    qs_historical = await anext(aiterator)
     questions = await question_imitate.verify(qs_historical, 614639, "hypothesis test", None)
     print(len(questions))
     for question in questions:
@@ -105,3 +131,9 @@ async def test_agent_analyze_description(agent: AgentService):
     context = "compare with t-distribution"
     output = await agent.analyze_description(exam_kp=exam_kp, context=context)
     print(output)
+
+
+@pytest.mark.skip
+def test_stream_block_serialize():
+    obj = StreamBlock(q_src=QuestionSource.SameCourse, status="finish", count=1, time=0.123)
+    print(obj.model_dump_json())

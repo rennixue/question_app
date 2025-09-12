@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from textwrap import dedent
@@ -52,6 +53,24 @@ class MysqlService:
             )
             rows = cursor.all()
         return [(it[0], it[1]) for it in rows]
+
+    async def select_question_years(self, question_ids: Iterable[int]) -> list[tuple[int, int]]:
+        async with self._session_factory() as session:
+            cursor = await session.execute(
+                sql("""
+                    SELECT question_id, exam_year FROM db_exam_question
+                    WHERE question_id IN :question_ids
+                """).bindparams(bindparam("question_ids", expanding=True)),
+                {"question_ids": question_ids},
+            )
+            rows = cursor.all()
+        goods: list[tuple[int, int]] = []
+        for row in rows:
+            if row[1]:
+                if m := re.search(r"20\d\d", row[1]):
+                    year = int(m.group(0))
+                    goods.append((row[0], year))
+        return goods
 
     async def select_order_kps(
         self, order_id: int, file_limit: int, kp_limit: int

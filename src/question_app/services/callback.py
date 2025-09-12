@@ -36,7 +36,7 @@ class CallbackService:
         )
         await self._send_req(req)
 
-    async def notify_generate_ok(self, db_id: int, qs: list[Question]) -> None:
+    async def notify_generate_ok(self, db_id: int, qs: list[Question], err_msg: str | None = None) -> None:
         questions: list[dict[str, Any]] = []
         for no, q in enumerate(qs, 1):
             question = {
@@ -50,6 +50,8 @@ class CallbackService:
                 question["genQuestionInfo"] = q.meta_info
             questions.append(question)
         req_body: dict[str, Any] = {"status": 1, "taskId": db_id, "questions": questions}
+        if err_msg:
+            req_body["error"] = err_msg
         req = self._client.build_request("POST", "/courseware_platform/question/callback/generate", json=req_body)
         await self._send_req(req)
 

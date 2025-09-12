@@ -1,8 +1,9 @@
 import logging
 import random
 import re
+from collections.abc import AsyncIterator
 
-from ..models import AnalyzeDescriptionOutput, Question, QuestionType
+from ..models import AnalyzeDescriptionOutput, Question, QuestionSource, QuestionType
 from .agent import AgentService
 from .elasticsearch import ElasticsearchService
 from .mysql import MysqlService
@@ -47,8 +48,9 @@ class QuestionSearchService:
         course_code: str | None = None,
         university: str | None = None,
         limit_same_course: int = 10,
+        limit_same_university: int = 10,
         limit_historical: int = 10,
-    ) -> tuple[list[Question], list[Question]]:
+    ) -> AsyncIterator[list[Question]]:
         kp = exam_kp.strip().lower()
         if course_code:
             course_code = self._normalize_course_code(course_code)
@@ -56,7 +58,10 @@ class QuestionSearchService:
         q_type = question_type.to_elasticsearch_keyword()
         majors = await self.find_majors(major_name) if major_name else None
         if not majors:
-            return [], []
+            # NOTE watch out
+            yield []
+            yield []
+            yield []
         if course_code and university:
             questions_same_course = await self._elasticsearch.search_questions_same_course(
                 kp=kp,
@@ -69,15 +74,21 @@ class QuestionSearchService:
             )
         else:
             questions_same_course = []
-        if questions_same_course:
-            int_ids = [it.id.int for it in questions_same_course]
-            pairs = await self._mysql.select_question_contents(int_ids)
-            for int_id, q_content in pairs:
-                for it in questions_same_course:
-                    if it.id.int == int_id:
-                        if q_content:
-                            it.content = q_content
-                        break
+        yield await self._fetch_questions_other_data(questions_same_course)
+        if university:
+            questions_same_university = await self._elasticsearch.search_questions_same_university(
+                kp=kp,
+                kp_vec=kp_vec,
+                q_vec=q_vec,
+                q_type=q_type,
+                majors=majors,
+                course_code=course_code,
+                university=university,
+                limit=limit_same_university,
+            )
+        else:
+            questions_same_university = []
+        yield await self._fetch_questions_other_data(questions_same_university)
         questions_historical = await self._elasticsearch.search_questions_historical(
             kp=kp,
             kp_vec=kp_vec,
@@ -88,16 +99,7 @@ class QuestionSearchService:
             university=university,
             limit=limit_historical,
         )
-        if questions_historical:
-            int_ids = [it.id.int for it in questions_historical]
-            pairs = await self._mysql.select_question_contents(int_ids)
-            for int_id, q_content in pairs:
-                for it in questions_historical:
-                    if it.id.int == int_id:
-                        if q_content:
-                            it.content = q_content
-                        break
-        return questions_same_course, questions_historical
+        yield await self._fetch_questions_other_data(questions_historical)
 
     async def _create_embeddings(
         self, kp: str, context: str | None, major: str | None, course_name: str | None
@@ -135,8 +137,39 @@ class QuestionSearchService:
         if not closest_major:
             return []
         sim_majors = await self._mysql.select_sim_majors(closest_major, 0.8)
-        logger.debug("similar majors: %r", sim_majors)
+        logger.debug(f"{len(sim_majors)=}")
         return sim_majors
+
+    async def _fetch_questions_other_data(self, questions: list[Question]) -> list[Question]:
+        if not questions:
+            return questions
+        int_ids = [it.id.int for it in questions]
+        try:
+            pairs = await self._mysql.select_question_contents(int_ids)
+        except Exception as exc:
+            logger.error("error when fetch question contents: %r", exc)
+        else:
+            for int_id, q_content in pairs:
+                for it in questions:
+                    if it.id.int == int_id:
+                        if q_content:
+                            it.content = q_content
+                        break
+        try:
+            pairs = await self._mysql.select_question_years(int_ids)
+        except Exception as exc:
+            logger.error("error when fetch question years: %r", exc)
+        else:
+            for int_id, q_year in pairs:
+                for it in questions:
+                    if it.id.int == int_id:
+                        if it.source in (QuestionSource.SameCourse, QuestionSource.SameUniversity):
+                            if it.meta_info:
+                                it.meta_info = f"{q_year}年-{it.meta_info}"
+                            else:
+                                it.meta_info = f"{q_year}年"
+                        break
+        return questions
 
 
 class QuestionImitateService:

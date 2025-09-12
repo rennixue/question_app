@@ -11,6 +11,7 @@ Output in the given format. Do not make any explanation.
 
 ### Knowledge
 
+{% if key_points %}
 {% for key_point in key_points %}
 <key-point>
 <name>{{ key_point.name }}</name>
@@ -18,6 +19,9 @@ Output in the given format. Do not make any explanation.
 <relevance>{{ key_point.relevance }}</relevance>
 </key-point>
 {% endfor %}
+{% else %}
+Use common sense and the knowledge level of an undergraduate student.
+{% endif %}
 
 ### Output Format
 

@@ -1,8 +1,8 @@
 from enum import Enum
-from typing import Annotated, assert_never
+from typing import Annotated, Any, Literal, Self, assert_never
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_serializer, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,7 +44,8 @@ class Settings(BaseSettings):
 
 class QuestionSource(Enum):
     SameOrder = "same_order"
-    SameCourse = "same_course"  # also includes same university
+    SameCourse = "same_course"
+    SameUniversity = "same_university"
     Historical = "historical"
     Imitated = "imitated"
     Generated = "generated"
@@ -58,6 +59,8 @@ class QuestionSource(Enum):
                 return 2
             case QuestionSource.Historical:
                 return 4
+            case QuestionSource.SameUniversity:
+                return 5
             case _:
                 return 3
 
@@ -256,3 +259,47 @@ class AnalyzeDescriptionOutput(BaseModel):
     requirement: str = ""
     referential_question: str = ""
     other_info: str = ""
+
+
+class StreamBlock(BaseModel):
+    done: bool = False
+    q_src: QuestionSource | None = None
+    status: Literal["start", "progress", "finish", "checkpoint"] | None = None
+    count: int | None = None
+    time: float | None = None
+    questions: list[Question] | None = None
+
+    @model_validator(mode="after")
+    def check(self) -> Self:
+        if self.done:
+            assert self.q_src is None
+            assert self.status is None
+            assert self.count is not None
+            assert self.time is not None
+            assert self.questions is None
+        else:
+            assert self.q_src is not None
+            assert self.status is not None
+            match self.status:
+                case "start":
+                    assert self.count is None
+                    assert self.time is None
+                    assert self.questions is None
+                case "progress":
+                    assert self.time is None
+                    assert self.questions is not None
+                case "finish" | "checkpoint":
+                    assert self.time is not None
+                    assert self.count is not None
+        return self
+
+    @model_serializer()
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "done": self.done,
+            "genType": self.q_src.to_int() if self.q_src is not None else None,
+            "status": self.status,
+            "count": self.count,
+            "time": round(self.time, 2) if self.time is not None else None,
+            "questions": self.questions,
+        }

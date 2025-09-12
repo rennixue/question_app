@@ -44,6 +44,21 @@ POST http://localhost:8000/api/question/generate-stream
 }
 
 ###
+POST http://localhost:8000/api/question/generate-blocks
+
+{
+  "task_id": 123,
+  "course_id": 614639,
+  "exam_kp": "distribution",
+  "context": null,
+  "question_type": 0,
+  "major_name": "Statistics",
+  "course_name": null,
+  "course_code": "MSCI212",
+  "university_name": "兰卡斯特大学(Lancaster University)"
+}
+
+###
 POST http://localhost:8000/api/question/rewrite
 
 {
