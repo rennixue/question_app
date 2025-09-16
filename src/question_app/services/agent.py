@@ -188,9 +188,8 @@ class AgentService:
         major: str | None,
         course: str | None,
         key_points: list[KeyPoint],
+        number: int,
         known_questions: list[Question],
-        num_min: int,
-        num_max: int,
     ) -> AsyncIterator[list[Question]]:
         user_msg = self._tmpl_generate_second.render(
             exam_kp=exam_kp,
@@ -200,9 +199,8 @@ class AgentService:
             major=major,
             course=course,
             key_points=key_points,
+            number=number,
             known_questions=known_questions,
-            num_min=num_min,
-            num_max=num_max,
         )
         offset = 0
         async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:

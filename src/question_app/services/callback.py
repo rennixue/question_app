@@ -4,7 +4,7 @@ from typing import Any
 from httpx import AsyncClient, Request
 
 from ..context import request_id
-from ..models import Question
+from ..models import Question, QuestionSection
 
 logger = logging.getLogger(__name__)
 
@@ -36,20 +36,28 @@ class CallbackService:
         )
         await self._send_req(req)
 
-    async def notify_generate_ok(self, db_id: int, qs: list[Question], err_msg: str | None = None) -> None:
+    async def notify_generate_ok(
+        self, db_id: int, qs: list[Question], sections: list[QuestionSection] | None = None, err_msg: str | None = None
+    ) -> None:
         questions: list[dict[str, Any]] = []
         for no, q in enumerate(qs, 1):
             question = {
                 "questionNo": q.id.hex,
                 "questionType": q.type.to_int(),
                 "genType": q.source.to_int(),
+                "batchNo": q.batch_no,
                 "genNo": no,
                 "genQuestion": q.content,
             }
             if q.meta_info:
                 question["genQuestionInfo"] = q.meta_info
             questions.append(question)
-        req_body: dict[str, Any] = {"status": 1, "taskId": db_id, "questions": questions}
+        req_body: dict[str, Any] = {
+            "status": 1,
+            "taskId": db_id,
+            "questions": questions,
+            "sections": [it.model_dump() for it in sections] if sections is not None else None,
+        }
         if err_msg:
             req_body["error"] = err_msg
         req = self._client.build_request("POST", "/courseware_platform/question/callback/generate", json=req_body)

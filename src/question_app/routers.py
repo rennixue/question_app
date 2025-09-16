@@ -28,6 +28,7 @@ from .models import (
     Question,
     QuestionGenerateReq,
     QuestionRewriteReq,
+    QuestionSection,
     QuestionSource,
     QuestionType,
     StreamBlock,
@@ -382,6 +383,18 @@ async def iter_blocks(
 ):
     time_start = time.perf_counter()
     questions: list[Question] = []
+    count_same_course = 0
+    count_same_univ = 0
+    count_historical = 0
+    count_gen = 0
+    count_gen_1 = 0
+    count_gen_2 = 0
+    elapsed_same_course = 0.0
+    elapsed_same_univ = 0.0
+    elapsed_historical = 0.0
+    elapsed_gen = 0.0
+    elapsed_gen_1 = 0.0
+    elapsed_gen_2 = 0.0
     try:
         knowledge_task = asyncio.create_task(extract_key_points(r, agent, ollama, qdrant))
         # step 1: search questions
@@ -401,7 +414,6 @@ async def iter_blocks(
             # step 1.1: search same course questions
             time_same_course_start = time.perf_counter()
             yield encode_block(StreamBlock(q_src=QuestionSource.SameCourse, status="start"))
-            count_same_course = 0
             try:
                 qs_same_course = await anext(aiterator)
             except Exception as exc:
@@ -414,55 +426,51 @@ async def iter_blocks(
                     count_same_course = len(qs_same_course)
                     questions.extend(qs_same_course)
                 logger.debug(f"{len(qs_same_course)=}")
+            elapsed_same_course = time.perf_counter() - time_same_course_start
             yield encode_block(
                 StreamBlock(
                     q_src=QuestionSource.SameCourse,
                     status="finish",
                     count=count_same_course,
-                    time=time.perf_counter() - time_same_course_start,
+                    time=elapsed_same_course,
                 )
             )
             # step 1.2: search same university questions
-            time_same_university_start = time.perf_counter()
+            time_same_univ_start = time.perf_counter()
             yield encode_block(StreamBlock(q_src=QuestionSource.SameUniversity, status="start"))
             try:
                 analyzed_context, key_points = await knowledge_task
             except Exception as exc:
                 logger.error("fail to fetch knowledge: %r", exc)
                 analyzed_context, key_points = AnalyzeDescriptionOutput(), []
-            count_same_university = 0
             try:
                 qs_same_university = await anext(aiterator)
             except Exception as exc:
                 logger.error("fail to search same university: %r", exc)
             else:
                 if qs_same_university:
-                    qs_same_university_verified = await agent.verify_questions(
-                        qs_same_university, r.exam_kp, key_points
-                    )
-                    if qs_same_university_verified:
+                    qs_same_univ_verified = await agent.verify_questions(qs_same_university, r.exam_kp, key_points)
+                    if qs_same_univ_verified:
                         yield encode_block(
                             StreamBlock(
-                                q_src=QuestionSource.SameUniversity,
-                                status="progress",
-                                questions=qs_same_university_verified,
+                                q_src=QuestionSource.SameUniversity, status="progress", questions=qs_same_univ_verified
                             )
                         )
-                        count_same_university = len(qs_same_university_verified)
-                        questions.extend(qs_same_university_verified)
-                logger.debug(f"{len(qs_same_university)=}, {count_same_university=}")
+                        count_same_univ = len(qs_same_univ_verified)
+                        questions.extend(qs_same_univ_verified)
+                logger.debug(f"{len(qs_same_university)=}, {count_same_univ=}")
+            elapsed_same_univ = time.perf_counter() - time_same_univ_start
             yield encode_block(
                 StreamBlock(
                     q_src=QuestionSource.SameUniversity,
                     status="finish",
-                    count=count_same_university,
-                    time=time.perf_counter() - time_same_university_start,
+                    count=count_same_univ,
+                    time=elapsed_same_univ,
                 )
             )
             # step 1.3: search other university questions
             time_historical_start = time.perf_counter()
             yield encode_block(StreamBlock(q_src=QuestionSource.Historical, status="start"))
-            count_historical = 0
             try:
                 qs_historical = await anext(aiterator)
             except Exception as exc:
@@ -481,12 +489,13 @@ async def iter_blocks(
                         count_historical = len(qs_historical_verified)
                         questions.extend(qs_historical_verified)
                 logger.debug(f"{len(qs_historical)=}, {count_historical=}")
+            elapsed_historical = time.perf_counter() - time_historical_start
             yield encode_block(
                 StreamBlock(
                     q_src=QuestionSource.Historical,
                     status="finish",
                     count=count_historical,
-                    time=time.perf_counter() - time_historical_start,
+                    time=elapsed_historical,
                 )
             )
 
@@ -513,12 +522,14 @@ async def iter_blocks(
                 count_gen += len(some_questions)
                 questions.extend(some_questions)
                 qs_gen.extend(some_questions)
+        count_gen_1 = len(qs_gen)
+        elapsed_gen_1 = time.perf_counter() - time_gen_start
         yield encode_block(
             StreamBlock(
                 q_src=QuestionSource.Generated,
                 status="checkpoint",
-                count=count_gen,
-                time=time.perf_counter() - time_gen_start,
+                count=count_gen_1,
+                time=elapsed_gen_1,
             )
         )
         # step 2.2: generate questions second batch
@@ -530,35 +541,57 @@ async def iter_blocks(
             r.major_name,
             r.course_name,
             key_points,
+            random.randint(10, 20),
             qs_gen.copy(),
-            10,
-            20,
         ):
             if some_questions:
+                for it in some_questions:
+                    it.batch_no = 2
                 yield encode_block(
                     StreamBlock(q_src=QuestionSource.Generated, status="progress", questions=some_questions)
                 )
                 count_gen += len(some_questions)
                 questions.extend(some_questions)
                 qs_gen.extend(some_questions)
+        elapsed_gen = time.perf_counter() - time_gen_start
+        count_gen_2 = len(qs_gen) - count_gen_1
+        elapsed_gen_2 = elapsed_gen - elapsed_gen_1
         yield encode_block(
             StreamBlock(
                 q_src=QuestionSource.Generated,
                 status="finish",
                 count=count_gen,
-                time=time.perf_counter() - time_gen_start,
+                time=elapsed_gen,
             )
         )
         logger.debug(f"{len(qs_gen)=}")
 
         # step 3: notify callback
-        await callback.notify_generate_ok(r.task_id, questions)
+        # fmt: off
+        sections = [
+            QuestionSection(q_src=QuestionSource.SameCourse, batch_no=1, count=count_same_course, elapsed=elapsed_same_course),
+            QuestionSection(q_src=QuestionSource.SameUniversity, batch_no=1, count=count_same_univ, elapsed=elapsed_same_univ),
+            QuestionSection(q_src=QuestionSource.Historical, batch_no=1, count=count_historical, elapsed=elapsed_historical),
+            QuestionSection(q_src=QuestionSource.Generated, batch_no=1, count=count_gen_1, elapsed=elapsed_gen_1),
+            QuestionSection(q_src=QuestionSource.Generated, batch_no=2, count=count_gen_2, elapsed=elapsed_gen_2),
+        ]
+        # fmt: on
+        await callback.notify_generate_ok(r.task_id, questions, sections)
     except Exception as exc:
         logger.error("generate error: %r", exc)
         await callback.notify_generate_err(r.task_id, "error when generate")
     except asyncio.CancelledError:  # subclass of BaseException
         logger.warning("request cancelled")
-        await callback.notify_generate_ok(r.task_id, questions, "request cancelled")
+        # fmt: off
+        sections = [
+            QuestionSection(q_src=QuestionSource.SameCourse, batch_no=1, count=count_same_course, elapsed=elapsed_same_course),
+            QuestionSection(q_src=QuestionSource.SameUniversity, batch_no=1, count=count_same_univ, elapsed=elapsed_same_univ),
+            QuestionSection(q_src=QuestionSource.Historical, batch_no=1, count=count_historical, elapsed=elapsed_historical),
+            QuestionSection(q_src=QuestionSource.Generated, batch_no=1, count=count_gen_1, elapsed=elapsed_gen_1),
+            QuestionSection(q_src=QuestionSource.Generated, batch_no=2, count=count_gen_2, elapsed=elapsed_gen_2),
+        ]
+        # fmt: on
+        await callback.notify_generate_ok(r.task_id, questions, sections, "request cancelled")
     finally:
         time_total = time.perf_counter() - time_start
         logger.debug(f"total count: {len(questions)}, total time: {time_total}")

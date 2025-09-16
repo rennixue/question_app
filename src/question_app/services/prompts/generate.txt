@@ -30,7 +30,7 @@ You must use and should only use the following key points of knowledge to make t
 
 ### Output Requirements
 
-For each of the {{ number }} questions, output its content and type.
+For each question, output its content and type.
 {% if 'any' in question_type %}
 The types of questions should be varied, values in: calculation, multiple choice, open.
 {% else %}
@@ -48,7 +48,6 @@ Also, this requirement is mandatory: {{ requirement }}
 {% endif %}
 
 Regardless of what languange the instructions, knowledge and requirement is, the questions you write must be in English.
-
 
 ### Output Format
 

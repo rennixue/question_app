@@ -145,6 +145,7 @@ class Question(BaseModel):
     source: QuestionSource
     type: QuestionType
     meta_info: str | None = None
+    batch_no: int = 1
 
 
 class KeyPoint(BaseModel):
@@ -301,5 +302,33 @@ class StreamBlock(BaseModel):
             "status": self.status,
             "count": self.count,
             "time": round(self.time, 2) if self.time is not None else None,
-            "questions": self.questions,
+            "questions": [
+                {
+                    "questionNo": it.id,
+                    "questionType": it.type.to_int(),
+                    "genType": it.source.to_int(),
+                    "batchNo": it.batch_no,
+                    "genQuestion": it.content,
+                    "genQuestionInfo": it.meta_info,
+                }
+                for it in self.questions
+            ]
+            if self.questions is not None
+            else None,
+        }
+
+
+class QuestionSection(BaseModel):
+    q_src: QuestionSource
+    batch_no: int
+    count: int
+    elapsed: float
+
+    @model_serializer()
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "genType": self.q_src.to_int(),
+            "batchNo": self.batch_no,
+            "count": self.count,
+            "elapsed": round(self.elapsed, 2),
         }
