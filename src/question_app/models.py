@@ -304,7 +304,7 @@ class StreamBlock(BaseModel):
             "time": round(self.time, 2) if self.time is not None else None,
             "questions": [
                 {
-                    "questionNo": it.id,
+                    "questionNo": it.id.hex,
                     "questionType": it.type.to_int(),
                     "genType": it.source.to_int(),
                     "batchNo": it.batch_no,
