@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import random
 import re
 import time
 from asyncio import Task, TaskGroup
@@ -496,7 +497,14 @@ async def iter_blocks(
         # step 2.1: generate questions first batch
         yield encode_block(StreamBlock(q_src=QuestionSource.Generated, status="start"))
         async for some_questions in agent.generate_stream_first(
-            r.exam_kp, r.context, analyzed_context, r.question_type, r.major_name, r.course_name, key_points, 10
+            r.exam_kp,
+            r.context,
+            analyzed_context,
+            r.question_type,
+            r.major_name,
+            r.course_name,
+            key_points,
+            random.randint(10, 20),
         ):
             if some_questions:
                 yield encode_block(

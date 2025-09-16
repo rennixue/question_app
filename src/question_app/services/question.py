@@ -165,7 +165,7 @@ class QuestionSearchService:
                     if it.id.int == int_id:
                         if it.source in (QuestionSource.SameCourse, QuestionSource.SameUniversity):
                             if it.meta_info:
-                                it.meta_info = f"{q_year}年-{it.meta_info}"
+                                it.meta_info = f"{q_year}年\u00b7{it.meta_info}"
                             else:
                                 it.meta_info = f"{q_year}年"
                         break

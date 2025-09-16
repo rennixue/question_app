@@ -213,6 +213,6 @@ class ElasticsearchService:
                 else:
                     university = ""
                 course_name = d.get("course_name", "")
-                return "-".join(it for it in [university, course_name] if it)
+                return "\u00b7".join(it for it in [university, course_name] if it)
             case _:
                 return ""
