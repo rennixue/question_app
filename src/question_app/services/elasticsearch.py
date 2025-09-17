@@ -205,7 +205,7 @@ class ElasticsearchService:
             case QuestionSource.SameCourse:
                 return "Past Paper"
             case QuestionSource.SameUniversity:
-                return d.get("course_code") or ""  # course_code can be null when stored
+                return d.get("course_name") or ""  # course_name can be null when stored
             case QuestionSource.Historical:
                 if university := d.get("university"):
                     university = re.sub(r"\(.+?\)", "", university).strip()
