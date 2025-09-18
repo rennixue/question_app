@@ -28,12 +28,36 @@ class CallbackService:
             else:
                 logger.debug("callback success: %r", resp.content)
 
-    async def notify_generate_err(self, db_id: int, err_msg: str) -> None:
-        req = self._client.build_request(
-            "POST",
-            "/courseware_platform/question/callback/generate",
-            json={"status": 0, "taskId": db_id, "error": err_msg},
-        )
+    async def notify_generate_err(
+        self, db_id: int, err_msg: str, qs: list[Question] | None = None, sections: list[QuestionSection] | None = None
+    ) -> None:
+        if qs is None:
+            req = self._client.build_request(
+                "POST",
+                "/courseware_platform/question/callback/generate",
+                json={"status": 0, "taskId": db_id, "error": err_msg},
+            )
+        else:
+            questions: list[dict[str, Any]] = []
+            for no, q in enumerate(qs, 1):
+                question = {
+                    "questionNo": q.id.hex,
+                    "questionType": q.type.to_int(),
+                    "genType": q.source.to_int(),
+                    "batchNo": q.batch_no,
+                    "genNo": no,
+                    "genQuestion": q.content,
+                }
+                if q.meta_info:
+                    question["genQuestionInfo"] = q.meta_info
+                questions.append(question)
+            req_body: dict[str, Any] = {
+                "status": 0,
+                "taskId": db_id,
+                "questions": questions,
+                "sections": [it.model_dump() for it in sections] if sections is not None else None,
+            }
+            req = self._client.build_request("POST", "/courseware_platform/question/callback/generate", json=req_body)
         await self._send_req(req)
 
     async def notify_generate_ok(

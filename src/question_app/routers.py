@@ -579,7 +579,16 @@ async def iter_blocks(
         await callback.notify_generate_ok(r.task_id, questions, sections)
     except Exception as exc:
         logger.error("generate error: %r", exc)
-        await callback.notify_generate_err(r.task_id, "error when generate")
+        # fmt: off
+        sections = [
+            QuestionSection(q_src=QuestionSource.SameCourse, batch_no=1, count=count_same_course, elapsed=elapsed_same_course),
+            QuestionSection(q_src=QuestionSource.SameUniversity, batch_no=1, count=count_same_univ, elapsed=elapsed_same_univ),
+            QuestionSection(q_src=QuestionSource.Historical, batch_no=1, count=count_historical, elapsed=elapsed_historical),
+            QuestionSection(q_src=QuestionSource.Generated, batch_no=1, count=count_gen_1, elapsed=elapsed_gen_1),
+            QuestionSection(q_src=QuestionSource.Generated, batch_no=2, count=count_gen_2, elapsed=elapsed_gen_2),
+        ]
+        # fmt: on
+        await callback.notify_generate_err(r.task_id, "error when generate", questions, sections)
     except asyncio.CancelledError:  # subclass of BaseException
         logger.warning("request cancelled")
         # fmt: off
