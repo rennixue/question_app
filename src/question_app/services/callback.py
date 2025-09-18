@@ -54,6 +54,7 @@ class CallbackService:
             req_body: dict[str, Any] = {
                 "status": 0,
                 "taskId": db_id,
+                "error": err_msg,
                 "questions": questions,
                 "sections": [it.model_dump() for it in sections] if sections is not None else None,
             }
