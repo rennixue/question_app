@@ -372,6 +372,18 @@ async def extract_key_points(
     return analyzed_context, key_points
 
 
+def sort_by_year(qs: list[Question]) -> list[Question]:
+    pairs: list[tuple[int, Question]] = []
+    for it in qs:
+        year = 0
+        if it.meta_info:
+            if m := re.search(r"^20\d\d", it.meta_info):
+                year = int(m.group(0))
+        pairs.append((year, it))
+    pairs.sort(key=lambda x: x[0], reverse=True)
+    return [it[1] for it in pairs]
+
+
 async def iter_blocks(
     request: Request,
     r: QuestionGenerateReq,
@@ -420,6 +432,7 @@ async def iter_blocks(
                 logger.error("fail to search same course: %r", exc)
             else:
                 if qs_same_course:
+                    qs_same_course = sort_by_year(qs_same_course)  # NOTE bad
                     yield encode_block(
                         StreamBlock(q_src=QuestionSource.SameCourse, status="progress", questions=qs_same_course)
                     )
@@ -429,10 +442,7 @@ async def iter_blocks(
             elapsed_same_course = time.perf_counter() - time_same_course_start
             yield encode_block(
                 StreamBlock(
-                    q_src=QuestionSource.SameCourse,
-                    status="finish",
-                    count=count_same_course,
-                    time=elapsed_same_course,
+                    q_src=QuestionSource.SameCourse, status="finish", count=count_same_course, time=elapsed_same_course
                 )
             )
             # step 1.2: search same university questions
@@ -444,12 +454,13 @@ async def iter_blocks(
                 logger.error("fail to fetch knowledge: %r", exc)
                 analyzed_context, key_points = AnalyzeDescriptionOutput(), []
             try:
-                qs_same_university = await anext(aiterator)
+                qs_same_univ = await anext(aiterator)
             except Exception as exc:
                 logger.error("fail to search same university: %r", exc)
             else:
-                if qs_same_university:
-                    qs_same_univ_verified = await agent.verify_questions(qs_same_university, r.exam_kp, key_points)
+                if qs_same_univ:
+                    qs_same_univ = sort_by_year(qs_same_univ)  # NOTE bad
+                    qs_same_univ_verified = await agent.verify_questions(qs_same_univ, r.exam_kp, key_points)
                     if qs_same_univ_verified:
                         yield encode_block(
                             StreamBlock(
@@ -458,14 +469,11 @@ async def iter_blocks(
                         )
                         count_same_univ = len(qs_same_univ_verified)
                         questions.extend(qs_same_univ_verified)
-                logger.debug(f"{len(qs_same_university)=}, {count_same_univ=}")
+                logger.debug(f"{len(qs_same_univ)=}, {count_same_univ=}")
             elapsed_same_univ = time.perf_counter() - time_same_univ_start
             yield encode_block(
                 StreamBlock(
-                    q_src=QuestionSource.SameUniversity,
-                    status="finish",
-                    count=count_same_univ,
-                    time=elapsed_same_univ,
+                    q_src=QuestionSource.SameUniversity, status="finish", count=count_same_univ, time=elapsed_same_univ
                 )
             )
             # step 1.3: search other university questions
@@ -481,9 +489,7 @@ async def iter_blocks(
                     if qs_historical_verified:
                         yield encode_block(
                             StreamBlock(
-                                q_src=QuestionSource.Historical,
-                                status="progress",
-                                questions=qs_historical_verified,
+                                q_src=QuestionSource.Historical, status="progress", questions=qs_historical_verified
                             )
                         )
                         count_historical = len(qs_historical_verified)
@@ -492,10 +498,7 @@ async def iter_blocks(
             elapsed_historical = time.perf_counter() - time_historical_start
             yield encode_block(
                 StreamBlock(
-                    q_src=QuestionSource.Historical,
-                    status="finish",
-                    count=count_historical,
-                    time=elapsed_historical,
+                    q_src=QuestionSource.Historical, status="finish", count=count_historical, time=elapsed_historical
                 )
             )
 
@@ -525,12 +528,7 @@ async def iter_blocks(
         count_gen_1 = len(qs_gen)
         elapsed_gen_1 = time.perf_counter() - time_gen_start
         yield encode_block(
-            StreamBlock(
-                q_src=QuestionSource.Generated,
-                status="checkpoint",
-                count=count_gen_1,
-                time=elapsed_gen_1,
-            )
+            StreamBlock(q_src=QuestionSource.Generated, status="checkpoint", count=count_gen_1, time=elapsed_gen_1)
         )
         # step 2.2: generate questions second batch
         async for some_questions in agent.generate_stream_second(
@@ -557,12 +555,7 @@ async def iter_blocks(
         count_gen_2 = len(qs_gen) - count_gen_1
         elapsed_gen_2 = elapsed_gen - elapsed_gen_1
         yield encode_block(
-            StreamBlock(
-                q_src=QuestionSource.Generated,
-                status="finish",
-                count=count_gen,
-                time=elapsed_gen,
-            )
+            StreamBlock(q_src=QuestionSource.Generated, status="finish", count=count_gen, time=elapsed_gen)
         )
         logger.debug(f"{len(qs_gen)=}")
 
