@@ -169,6 +169,7 @@ class ElasticsearchService:
                 "course_name",
                 "course_code",
                 "key_kps",
+                "file_type",
             ],
         )
         return resp
@@ -203,6 +204,8 @@ class ElasticsearchService:
     def _make_question_meta_info(self, d: dict[str, Any], src: QuestionSource) -> str:
         match src:
             case QuestionSource.SameCourse:
+                if d.get("file_type") == "tutorial question":
+                    return "Tutorial Question"
                 return "Past Paper"
             case QuestionSource.SameUniversity:
                 return d.get("course_name") or ""  # course_name can be null when stored
