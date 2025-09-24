@@ -448,17 +448,18 @@ async def iter_blocks(
             # step 1.2: search same university questions
             time_same_univ_start = time.perf_counter()
             yield encode_block(StreamBlock(q_src=QuestionSource.SameUniversity, status="start"))
-            try:
-                analyzed_context, key_points = await knowledge_task
-            except Exception as exc:
-                logger.error("fail to fetch knowledge: %r", exc)
-                analyzed_context, key_points = AnalyzeDescriptionOutput(), []
+            analyzed_context, key_points = None, None
             try:
                 qs_same_univ = await anext(aiterator)
             except Exception as exc:
                 logger.error("fail to search same university: %r", exc)
             else:
                 if qs_same_univ:
+                    try:
+                        analyzed_context, key_points = await knowledge_task
+                    except Exception as exc:
+                        logger.error("fail to fetch knowledge: %r", exc)
+                        analyzed_context, key_points = AnalyzeDescriptionOutput(), []
                     qs_same_univ = sort_by_year(qs_same_univ)  # NOTE bad
                     qs_same_univ_verified = await agent.verify_questions(qs_same_univ, r.exam_kp, key_points)
                     if qs_same_univ_verified:
@@ -485,6 +486,15 @@ async def iter_blocks(
                 logger.error("fail to search same course: %r", exc)
             else:
                 if qs_historical:
+                    if (analyzed_context, key_points) == (None, None):
+                        try:
+                            analyzed_context, key_points = await knowledge_task
+                        except Exception as exc:
+                            logger.error("fail to fetch knowledge: %r", exc)
+                            analyzed_context, key_points = AnalyzeDescriptionOutput(), []
+                    else:
+                        assert analyzed_context is not None
+                        assert key_points is not None
                     qs_historical_verified = await agent.verify_questions(qs_historical, r.exam_kp, key_points)
                     if qs_historical_verified:
                         yield encode_block(
@@ -508,6 +518,15 @@ async def iter_blocks(
         qs_gen: list[Question] = []
         # step 2.1: generate questions first batch
         yield encode_block(StreamBlock(q_src=QuestionSource.Generated, status="start"))
+        if (analyzed_context, key_points) == (None, None):
+            try:
+                analyzed_context, key_points = await knowledge_task
+            except Exception as exc:
+                logger.error("fail to fetch knowledge: %r", exc)
+                analyzed_context, key_points = AnalyzeDescriptionOutput(), []
+        else:
+            assert analyzed_context is not None
+            assert key_points is not None
         async for some_questions in agent.generate_stream_first(
             r.exam_kp,
             r.context,
