@@ -33,7 +33,6 @@ from .models import (
     QuestionType,
     StreamBlock,
 )
-from .services.question import reorder_choices
 
 logger = logging.getLogger(__name__)
 
@@ -279,8 +278,8 @@ async def iter_chunks(
         asst_msg = "".join(chunks)
         for it in re.finditer(r"(?s)<question>(.+?)</question>", asst_msg):
             q_content, q_type = agent._parse_question(it.group())  # type: ignore
-            if q_type == QuestionType.MultipleChoice:
-                q_content = reorder_choices(q_content)
+            # if q_type == QuestionType.MultipleChoice:
+            #     q_content = reorder_choices(q_content)
             qs_generate.append(Question(content=q_content, type=q_type, source=QuestionSource.Generated))
         yield encode_chunk({"done": False, "message": "\n生成题目完成。"})
         logger.debug("generate completed")

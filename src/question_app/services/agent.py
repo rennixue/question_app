@@ -173,8 +173,8 @@ class AgentService:
                 for q_content, q_type in pairs[offset:]:
                     if question_type != QuestionType.Any and q_type != question_type:
                         continue
-                    if q_type == QuestionType.MultipleChoice:
-                        q_content = reorder_choices(q_content)
+                    # if q_type == QuestionType.MultipleChoice:
+                    #     q_content = reorder_choices(q_content)
                     new_questions.append(Question(content=q_content, type=q_type, source=QuestionSource.Generated))
                 offset = len(pairs)
                 yield new_questions
@@ -213,8 +213,8 @@ class AgentService:
                 for q_content, q_type in pairs[offset:]:
                     if question_type != QuestionType.Any and q_type != question_type:
                         continue
-                    if q_type == QuestionType.MultipleChoice:
-                        q_content = reorder_choices(q_content)
+                    # if q_type == QuestionType.MultipleChoice:
+                    #     q_content = reorder_choices(q_content)
                     new_questions.append(Question(content=q_content, type=q_type, source=QuestionSource.Generated))
                 offset = len(pairs)
                 yield new_questions

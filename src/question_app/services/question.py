@@ -227,9 +227,9 @@ class QuestionGenerateService:
         questions = await self._agent.generate(
             exam_kp, context, AnalyzeDescriptionOutput(), question_type, major, course_name, key_points, num
         )
-        for it in questions:
-            if it.type == QuestionType.MultipleChoice:
-                it.content = reorder_choices(it.content)
+        # for it in questions:
+        #     if it.type == QuestionType.MultipleChoice:
+        #         it.content = reorder_choices(it.content)
         logger.debug("questions: %r", questions)
         return questions
 
