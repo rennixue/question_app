@@ -383,6 +383,12 @@ def sort_by_year(qs: list[Question]) -> list[Question]:
     return [it[1] for it in pairs]
 
 
+def cleanse_question_content(qs: list[Question]) -> list[Question]:
+    for it in qs:
+        it.content = re.sub(r"(?m)^#{1,4} (.+)$", "**\\1**", it.content)
+    return qs
+
+
 async def iter_blocks(
     request: Request,
     r: QuestionGenerateReq,
@@ -432,6 +438,7 @@ async def iter_blocks(
             else:
                 if qs_same_course:
                     qs_same_course = sort_by_year(qs_same_course)  # NOTE bad
+                    qs_same_course = cleanse_question_content(qs_same_course)
                     yield encode_block(
                         StreamBlock(q_src=QuestionSource.SameCourse, status="progress", questions=qs_same_course)
                     )
@@ -460,6 +467,7 @@ async def iter_blocks(
                         logger.error("fail to fetch knowledge: %r", exc)
                         analyzed_context, key_points = AnalyzeDescriptionOutput(), []
                     qs_same_univ = sort_by_year(qs_same_univ)  # NOTE bad
+                    qs_same_univ = cleanse_question_content(qs_same_univ)
                     qs_same_univ_verified = await agent.verify_questions(qs_same_univ, r.exam_kp, key_points)
                     if qs_same_univ_verified:
                         yield encode_block(
@@ -494,6 +502,7 @@ async def iter_blocks(
                     else:
                         assert analyzed_context is not None
                         assert key_points is not None
+                    qs_historical = cleanse_question_content(qs_historical)
                     qs_historical_verified = await agent.verify_questions(qs_historical, r.exam_kp, key_points)
                     if qs_historical_verified:
                         yield encode_block(

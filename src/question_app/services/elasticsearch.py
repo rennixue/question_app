@@ -52,7 +52,7 @@ class ElasticsearchService:
         limit: int,
     ) -> list[Question]:
         filters: list[dict[str, Any]] = [
-            {"match_phrase": {"content": {"query": kp, "slop": 0}}},
+            {"match_phrase": {"content": {"query": kp, "slop": 10}}},
             {"term": {"course_code": {"value": course_code}}},
             {"term": {"university.raw": {"value": university}}},
         ]
@@ -75,7 +75,7 @@ class ElasticsearchService:
         limit: int,
     ) -> list[Question]:
         filters: list[dict[str, Any]] = [
-            {"match_phrase": {"content": {"query": kp, "slop": 0}}},
+            {"match_phrase": {"content": {"query": kp, "slop": 10}}},
             {"term": {"university.raw": {"value": university}}},
         ]
         if q_type:
@@ -102,7 +102,7 @@ class ElasticsearchService:
         limit: int,
     ) -> list[Question]:
         filters: list[dict[str, Any]] = [
-            {"match_phrase": {"content": {"query": kp, "slop": 0}}},
+            {"match_phrase": {"content": {"query": kp, "slop": 10}}},
         ]
         if q_type:
             filters.append({"term": {"question_type": q_type}})
