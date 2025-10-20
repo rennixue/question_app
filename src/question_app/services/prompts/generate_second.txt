@@ -40,7 +40,7 @@ And the newly made questions should be more difficult than the known questions.
 
 ### Output Requirements
 
-For each question, output its content and type.
+For each question, output its content and type inside <question></question>.
 {% if 'any' in question_type %}
 The types of questions should be varied, values in: calculation, multiple choice, open.
 {% else %}
@@ -61,11 +61,8 @@ Regardless of what languange the instructions, knowledge and requirement is, the
 
 ### Output Format
 
-<questions>
 <question>
 <content>
 </content>
-<type>
-</type>
+<type></type>
 </question>
-</questions>
