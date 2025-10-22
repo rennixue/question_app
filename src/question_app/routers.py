@@ -413,6 +413,16 @@ async def iter_blocks(
     elapsed_gen_1 = 0.0
     elapsed_gen_2 = 0.0
     try:
+        # timer for step 1.1
+        time_same_course_start = time.perf_counter()
+        try:
+            analyze_query_output = await agent.analyze_query(r.exam_kp)
+        except Exception as exc:
+            logger.warning("fail to extract terms: %r", exc)
+        else:
+            r.exam_kp = analyze_query_output.primary_term
+            r.context = (", ".join(analyze_query_output.secondary_terms) + "\n\n" + (r.context or "")).strip()
+            logger.info("actual searched exam_kp=%r, context=%r", r.exam_kp, r.context)
         knowledge_task = asyncio.create_task(extract_key_points(r, agent, ollama, qdrant))
         # step 1: search questions
         async with question_search._elasticsearch:  # type: ignore
@@ -429,7 +439,7 @@ async def iter_blocks(
                 20,
             )
             # step 1.1: search same course questions
-            time_same_course_start = time.perf_counter()
+            # time_same_course_start = time.perf_counter()
             yield encode_block(StreamBlock(q_src=QuestionSource.SameCourse, status="start"))
             try:
                 qs_same_course = await anext(aiterator)

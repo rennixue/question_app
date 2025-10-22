@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
 
-from ..models import AnalyzeDescriptionOutput, KeyPoint, Question, QuestionSource, QuestionType
+from ..models import AnalyzeDescriptionOutput, AnalyzeQueryOutput, KeyPoint, Question, QuestionSource, QuestionType
 from .prompt import TemplateManager
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ class AgentService:
         self._tmpl_generate = tmpl_mngr.load_template("generate")
         self._tmpl_generate_second = tmpl_mngr.load_template("generate_second")
         self._tmpl_analyze_description = tmpl_mngr.load_template("analyze_description")
+        self._tmpl_analyze_query = tmpl_mngr.load_template("analyze_query")
 
     async def analyze_chunks(self, query: str, chunks: list[str]) -> list[KeyPoint]:
         user_msg = self._tmpl_analyze_chunks.render(query=query, chunks=chunks)
@@ -239,6 +240,17 @@ class AgentService:
             output = AnalyzeDescriptionOutput()
         return output
 
+    async def analyze_query(self, query: str) -> AnalyzeQueryOutput:
+        user_msg = self._tmpl_analyze_query.render(query=query)
+        asst_msg = ""
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 256}) as result:
+            async for asst_msg in result.stream_text():
+                pass
+        output = self._parse_analyze_query(asst_msg)
+        if output is None:
+            raise ValueError("nothing extracted")
+        return output
+
     def _parse_entity(self, s: str) -> KeyPoint | None:
         if m := re.search(r"(?s)<name>(.+?)</name>", s):
             name = m.group(1).strip()
@@ -274,6 +286,15 @@ class AgentService:
             json_str = m.group(1).strip()
             try:
                 return AnalyzeDescriptionOutput.model_validate_json(json_str)
+            except Exception:
+                pass
+        return None
+
+    def _parse_analyze_query(self, s: str) -> AnalyzeQueryOutput | None:
+        if m := re.search(r"(?s)```json\n(.+?)\n```", s):
+            json_str = m.group(1).strip()
+            try:
+                return AnalyzeQueryOutput.model_validate_json(json_str)
             except Exception:
                 pass
         return None

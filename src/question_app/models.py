@@ -262,6 +262,11 @@ class AnalyzeDescriptionOutput(BaseModel):
     other_info: str = ""
 
 
+class AnalyzeQueryOutput(BaseModel):
+    primary_term: Annotated[str, Field(min_length=3)]
+    secondary_terms: Annotated[list[str], Field(default_factory=lambda: [])]
+
+
 class StreamBlock(BaseModel):
     done: bool = False
     q_src: QuestionSource | None = None
