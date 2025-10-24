@@ -7,13 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from .middlewares import RequestIdMiddleware
+from .middlewares import GenerateCounterMiddleware, RequestIdMiddleware
 from .routers import router
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.include_router(router)
+app.add_middleware(GenerateCounterMiddleware, 200)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"]
