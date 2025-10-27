@@ -81,6 +81,6 @@ class GenerateCounterMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http" and scope["method"] == "POST" and scope["path"] == "/api/question/generate-blocks":
             self.increment()
-            if self._curr_count % self._mult == 0:
+            if self._curr_count != 0 and self._curr_count % self._mult == 0:
                 asyncio.create_task(self.send_alert(self._last_date, self._curr_count))
         await self._app(scope, receive, send)
