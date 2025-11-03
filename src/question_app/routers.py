@@ -21,6 +21,7 @@ from .dependencies import (
     QuestionImitateDep,
     QuestionRewriteDep,
     QuestionSearchDep,
+    SettingsDep,
 )
 from .models import (
     AnalyzeDescriptionOutput,
@@ -348,7 +349,7 @@ async def extract_key_points(
     agent: AgentDep,
     ollama: OllamaDep,
     qdrant: QdrantDep,
-) -> tuple[AnalyzeDescriptionOutput, list[KeyPoint]]:
+) -> tuple[AnalyzeDescriptionOutput, list[KeyPoint], list[tuple[str, str]]]:
     # step 1: analyze context
     if r.context:
         analyzed_context = await agent.analyze_description(exam_kp=r.exam_kp, context=r.context)
@@ -368,7 +369,7 @@ async def extract_key_points(
     relevances = ["weak", "medium", "strong"]
     key_points.sort(key=lambda it: relevances.index(it.relevance), reverse=True)
     key_points = [it for it in key_points if it.relevance != "weak"]
-    return analyzed_context, key_points
+    return analyzed_context, key_points, pairs
 
 
 def sort_by_year(qs: list[Question]) -> list[Question]:
@@ -394,9 +395,11 @@ async def iter_blocks(
     r: QuestionGenerateReq,
     callback: CallbackDep,
     agent: AgentDep,
+    mysql: MysqlDep,
     ollama: OllamaDep,
     qdrant: QdrantDep,
     question_search: QuestionSearchDep,
+    settings: SettingsDep,
 ):
     time_start = time.perf_counter()
     questions: list[Question] = []
@@ -415,14 +418,18 @@ async def iter_blocks(
     try:
         # timer for step 1.1
         time_same_course_start = time.perf_counter()
+        await mysql.log_search(r.task_id, settings.is_dev, r.exam_kp, r.context, r.question_type)  # pyright: ignore[reportPrivateUsage]
         try:
             analyze_query_output = await agent.analyze_query(r.exam_kp)
+            await mysql.log_search_ext1(r.task_id, analyze_query_output)
+            kp_synonyms = analyze_query_output.synonyms
         except Exception as exc:
             logger.warning("fail to extract terms: %r", exc)
+            kp_synonyms = []
         else:
             r.exam_kp = analyze_query_output.primary_term
             r.context = (", ".join(analyze_query_output.secondary_terms) + "\n\n" + (r.context or "")).strip()
-            logger.info("actual searched exam_kp=%r, context=%r", r.exam_kp, r.context)
+            logger.info("actual searched exam_kp=%r, synonyms=%r, context=%r", r.exam_kp, kp_synonyms, r.context)
         knowledge_task = asyncio.create_task(extract_key_points(r, agent, ollama, qdrant))
         # step 1: search questions
         async with question_search._elasticsearch:  # type: ignore
@@ -437,6 +444,7 @@ async def iter_blocks(
                 20,
                 20,
                 20,
+                kp_synonyms,
             )
             # step 1.1: search same course questions
             # time_same_course_start = time.perf_counter()
@@ -464,7 +472,7 @@ async def iter_blocks(
             # step 1.2: search same university questions
             time_same_univ_start = time.perf_counter()
             yield encode_block(StreamBlock(q_src=QuestionSource.SameUniversity, status="start"))
-            analyzed_context, key_points = None, None
+            analyzed_context, key_points, chunks = None, None, []
             try:
                 qs_same_univ = await anext(aiterator)
             except Exception as exc:
@@ -472,13 +480,20 @@ async def iter_blocks(
             else:
                 if qs_same_univ:
                     try:
-                        analyzed_context, key_points = await knowledge_task
+                        analyzed_context, key_points, chunks = await knowledge_task
                     except Exception as exc:
                         logger.error("fail to fetch knowledge: %r", exc)
                         analyzed_context, key_points = AnalyzeDescriptionOutput(), []
                     qs_same_univ = sort_by_year(qs_same_univ)  # NOTE bad
                     qs_same_univ = cleanse_question_content(qs_same_univ)
                     qs_same_univ_verified = await agent.verify_questions(qs_same_univ, r.exam_kp, key_points)
+                    verified_ids_same_univ = [it.id for it in qs_same_univ_verified]
+                    await mysql.log_verify(
+                        r.task_id,
+                        settings.is_dev,
+                        QuestionSource.SameUniversity,
+                        [(q.id, q.id in verified_ids_same_univ, q.type, q.content) for q in qs_same_univ],
+                    )
                     if qs_same_univ_verified:
                         yield encode_block(
                             StreamBlock(
@@ -505,15 +520,22 @@ async def iter_blocks(
                 if qs_historical:
                     if (analyzed_context, key_points) == (None, None):
                         try:
-                            analyzed_context, key_points = await knowledge_task
+                            analyzed_context, key_points, chunks = await knowledge_task
                         except Exception as exc:
                             logger.error("fail to fetch knowledge: %r", exc)
-                            analyzed_context, key_points = AnalyzeDescriptionOutput(), []
+                            analyzed_context, key_points, chunks = AnalyzeDescriptionOutput(), [], []
                     else:
                         assert analyzed_context is not None
                         assert key_points is not None
                     qs_historical = cleanse_question_content(qs_historical)
                     qs_historical_verified = await agent.verify_questions(qs_historical, r.exam_kp, key_points)
+                    verified_ids_historical = [it.id for it in qs_historical_verified]
+                    await mysql.log_verify(
+                        r.task_id,
+                        settings.is_dev,
+                        QuestionSource.Historical,
+                        [(q.id, q.id in verified_ids_historical, q.type, q.content) for q in qs_historical],
+                    )
                     if qs_historical_verified:
                         yield encode_block(
                             StreamBlock(
@@ -538,13 +560,15 @@ async def iter_blocks(
         yield encode_block(StreamBlock(q_src=QuestionSource.Generated, status="start"))
         if (analyzed_context, key_points) == (None, None):
             try:
-                analyzed_context, key_points = await knowledge_task
+                analyzed_context, key_points, chunks = await knowledge_task
             except Exception as exc:
                 logger.error("fail to fetch knowledge: %r", exc)
-                analyzed_context, key_points = AnalyzeDescriptionOutput(), []
+                analyzed_context, key_points, chunks = AnalyzeDescriptionOutput(), [], []
         else:
             assert analyzed_context is not None
             assert key_points is not None
+            # chunks can be empty
+        await mysql.log_search_ext2(r.task_id, analyzed_context, key_points, chunks)
         async for some_questions in agent.generate_stream_first(
             r.exam_kp,
             r.context,
@@ -643,11 +667,14 @@ async def post_question_generate_blocks(
     req_body: QuestionGenerateReq,
     callback: CallbackDep,
     agent: AgentDep,
+    mysql: MysqlDep,
     ollama: OllamaDep,
     qdrant: QdrantDep,
     question_search: QuestionSearchDep,
+    settings: SettingsDep,
 ):
     logger.debug("request body: %r", req_body)
     return StreamingResponse(
-        iter_blocks(req, req_body, callback, agent, ollama, qdrant, question_search), media_type="text/event-stream"
+        iter_blocks(req, req_body, callback, agent, mysql, ollama, qdrant, question_search, settings),
+        media_type="text/event-stream",
     )

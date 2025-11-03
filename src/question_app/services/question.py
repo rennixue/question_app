@@ -50,6 +50,7 @@ class QuestionSearchService:
         limit_same_course: int = 10,
         limit_same_university: int = 10,
         limit_historical: int = 10,
+        kp_synonyms: list[str] | None = None,
     ) -> AsyncIterator[list[Question]]:
         kp = exam_kp.strip().lower()
         if course_code:
@@ -71,6 +72,7 @@ class QuestionSearchService:
                 course_code=course_code,
                 university=university,
                 limit=limit_same_course,
+                kp_synonyms=kp_synonyms,
             )
         else:
             questions_same_course = []
@@ -85,6 +87,7 @@ class QuestionSearchService:
                 course_code=course_code,
                 university=university,
                 limit=limit_same_university,
+                kp_synonyms=kp_synonyms,
             )
         else:
             questions_same_university = []
@@ -98,6 +101,7 @@ class QuestionSearchService:
             course_code=course_code,
             university=university,
             limit=limit_historical,
+            kp_synonyms=kp_synonyms,
         )
         yield await self._fetch_questions_other_data(questions_historical)
 

@@ -53,7 +53,7 @@ class QdrantService:
             vec,
             query_filter=qm.Filter(must=[qm.FieldCondition(key="order_id", match=qm.MatchValue(value=order_id))]),
             with_payload=["chunk"],
-            score_threshold=0.2,
+            score_threshold=0.5,
             limit=min(max(4, limit * 2), limit + 4),
         )
         if len(resp.points) == 0:
@@ -68,6 +68,7 @@ class QdrantService:
         return pairs[:limit]
 
     def _kp_in_chunk(self, lowered_kp: str, chunk: str) -> bool:
+        return True
         lowered_chunk = chunk.lower()
         # NOTE not longest common subsequence
         # TODO find a better library

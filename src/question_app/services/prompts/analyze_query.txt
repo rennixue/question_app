@@ -9,6 +9,7 @@ You want to search for some exam questions from a query by extracting terms. A t
 Extract exactly one primary term from the query, as well as some secondary terms if mentioned. The number of secondary key terms should vary from 0 to 3.
 If the query is a single phrase, then you must consider the whole phrase as the primary term with empty secondary terms.
 If the query mentions "and" / "or" relationship between key terms, or the query is long (e.g. expressed in a sentence), you are encouraged to divide it into one primary term and several secondary terms.
+The strict synonyms (including acronyms) of the primary term, if any, should be output in "synonyms" field.
 
 You must output in the required format, with no explanation.
 
@@ -16,8 +17,9 @@ You must output in the required format, with no explanation.
 
 ```json
 {
-  "primary_term": ""
-  "secondary_terms": [""]
+  "primary_term": "",
+  "secondary_terms": [""],
+  "synonyms": [""],
 }
 ```
 

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     callback_base_url: HttpUrl
     feishu_webhook_url: HttpUrl
     skip_callback: bool = False
+    is_dev: bool = False
     elasticsearch: ElasticsearchSettings
     ollama: OllamaSettings
     openai: OpenaiSettings
@@ -89,7 +90,7 @@ class QuestionType(Enum):
     def to_int(self) -> int:
         match self:
             case QuestionType.Any:
-                raise ValueError("QuestionType.Any cannot be converted to an integer")
+                return 0
             case QuestionType.Calculation:
                 return 4
             case QuestionType.MultipleChoice:
@@ -264,8 +265,9 @@ class AnalyzeDescriptionOutput(BaseModel):
 
 
 class AnalyzeQueryOutput(BaseModel):
-    primary_term: Annotated[str, Field(min_length=3)]
+    primary_term: Annotated[str, Field(min_length=1)]
     secondary_terms: Annotated[list[str], Field(default_factory=lambda: [])]
+    synonyms: Annotated[list[str], Field(default_factory=lambda: [])]
 
 
 class StreamBlock(BaseModel):

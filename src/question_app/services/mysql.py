@@ -1,14 +1,29 @@
 import json
+import logging
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from textwrap import dedent
+from uuid import UUID
 
+import pydantic_core
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import bindparam, text
 from sqlalchemy.sql.elements import TextClause
 
-from ..models import CourseMaterialType, ExtractedFile, ExtractedFileWithType, KeyPointNameAndFreq
+from ..models import (
+    AnalyzeDescriptionOutput,
+    AnalyzeQueryOutput,
+    CourseMaterialType,
+    ExtractedFile,
+    ExtractedFileWithType,
+    KeyPoint,
+    KeyPointNameAndFreq,
+    QuestionSource,
+    QuestionType,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def sql(s: str) -> TextClause:
@@ -130,3 +145,90 @@ class MysqlService:
         order_kp_triples.sort(key=lambda it: it[2], reverse=True)
         order_kps = [KeyPointNameAndFreq(name=name, freq=freq) for name, freq, _ in order_kp_triples[:kp_limit]]
         return True, files, files_with_types, order_kps
+
+    async def log_search(
+        self, task_id: int, is_dev: bool, exam_kp: str, context: str | None, search_q_type: QuestionType
+    ) -> None:
+        try:
+            async with self._session_factory() as session:
+                await session.execute(
+                    sql("""
+                        INSERT INTO tiku_log_search (task_id, is_dev, exam_kp, context, search_q_type)
+                        VALUES (:task_id, :is_dev, :exam_kp, :context, :search_q_type)
+                    """),
+                    {
+                        "task_id": task_id,
+                        "is_dev": is_dev,
+                        "exam_kp": exam_kp,
+                        "context": context,
+                        "search_q_type": search_q_type.to_int(),
+                    },
+                )
+                await session.commit()
+        except Exception as exc:
+            logger.error("fail to mysql log_search %d: %r", task_id, exc)
+
+    async def log_search_ext1(self, task_id: int, analyze_query_output: AnalyzeQueryOutput) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                sql("""
+                    UPDATE tiku_log_search SET kp_output = :kp_output WHERE task_id = :task_id
+                """),
+                {
+                    "task_id": task_id,
+                    "kp_output": analyze_query_output.model_dump_json() if analyze_query_output else None,
+                },
+            )
+            await session.commit()
+
+    async def log_search_ext2(
+        self,
+        task_id: int,
+        analyze_description_output: AnalyzeDescriptionOutput,
+        key_points: list[KeyPoint],
+        chunks: list[tuple[str, str]],
+    ) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                sql("""
+                    UPDATE tiku_log_search SET ctx_output = :ctx_output, kps = :kps, chunks = :chunks
+                    WHERE task_id = :task_id
+                """),
+                {
+                    "task_id": task_id,
+                    "ctx_output": analyze_description_output.model_dump_json() if analyze_description_output else None,
+                    "kps": pydantic_core.to_json(key_points),
+                    "chunks": pydantic_core.to_json(chunks),
+                },
+            )
+            await session.commit()
+
+    async def log_verify(
+        self, task_id: int, is_dev: bool, q_src: QuestionSource, qs: list[tuple[UUID, bool, QuestionType, str]]
+    ) -> None:
+        if not qs:
+            return
+        try:
+            q_src_int = q_src.to_int()
+            async with self._session_factory() as session:
+                await session.execute(
+                    sql("""
+                        INSERT INTO tiku_log_verify (task_id, is_dev, q_src, q_id, is_remaining, q_type, q_content)
+                        VALUES (:task_id, :is_dev, :q_src, :q_id, :is_remaining, :q_type, :q_content)
+                    """),
+                    [
+                        {
+                            "task_id": task_id,
+                            "is_dev": is_dev,
+                            "q_src": q_src_int,
+                            "q_id": q_id.int,
+                            "is_remaining": is_remaining,
+                            "q_type": q_type.to_int(),
+                            "q_content": q_content,
+                        }
+                        for q_id, is_remaining, q_type, q_content in qs
+                    ],
+                )
+                await session.commit()
+        except Exception as exc:
+            logger.error("fail to mysql log_verify %d: %r", task_id, exc)

@@ -16,7 +16,7 @@ The questions should be related to the major "{{ major }}".
 The questions should be related to the course "{{ course }}".
 {% endif %}
 
-You must use and should only use the following key points of knowledge to make the questions.
+The scope of knowledge must be inside the following key points of knowledge.
 
 ### Knowledge
 

@@ -50,9 +50,10 @@ class ElasticsearchService:
         course_code: str,
         university: str,
         limit: int,
+        kp_synonyms: list[str] | None = None,
     ) -> list[Question]:
         filters: list[dict[str, Any]] = [
-            {"match_phrase": {"content": {"query": kp, "slop": 10}}},
+            self._make_filter_text_match(kp, kp_synonyms),
             {"term": {"course_code": {"value": course_code}}},
             {"term": {"university.raw": {"value": university}}},
         ]
@@ -73,9 +74,10 @@ class ElasticsearchService:
         course_code: str | None,
         university: str,
         limit: int,
+        kp_synonyms: list[str] | None = None,
     ) -> list[Question]:
         filters: list[dict[str, Any]] = [
-            {"match_phrase": {"content": {"query": kp, "slop": 10}}},
+            self._make_filter_text_match(kp, kp_synonyms),
             {"term": {"university.raw": {"value": university}}},
         ]
         if q_type:
@@ -100,9 +102,10 @@ class ElasticsearchService:
         course_code: str | None,
         university: str | None,
         limit: int,
+        kp_synonyms: list[str] | None = None,
     ) -> list[Question]:
         filters: list[dict[str, Any]] = [
-            {"match_phrase": {"content": {"query": kp, "slop": 10}}},
+            self._make_filter_text_match(kp, kp_synonyms),
         ]
         if q_type:
             filters.append({"term": {"question_type": q_type}})
@@ -140,6 +143,16 @@ class ElasticsearchService:
 
     def _make_size(self, limit: int) -> int:
         return min(max(10, limit * 2), limit + 10)
+
+    def _make_filter_text_match(self, kp: str, kp_synonyms: list[str] | None) -> dict[str, Any]:
+        return {
+            "bool": {
+                "should": [
+                    {"match_phrase": {"content": {"query": it, "slop": 10}}} for it in [kp, *(kp_synonyms or [])]
+                ],
+                "minimum_should_match": 1,
+            }
+        }
 
     async def _knn_search(
         self,
@@ -204,7 +217,7 @@ class ElasticsearchService:
     def _make_question_meta_info(self, d: dict[str, Any], src: QuestionSource) -> str:
         match src:
             case QuestionSource.SameCourse:
-                if d.get("file_type") == "tutorial question":
+                if d.get("file_type") == "tutorial question" or d.get("file_type") == "tutorial questions":
                     return "Tutorial Question"
                 return "Past Paper"
             case QuestionSource.SameUniversity:
