@@ -16,9 +16,10 @@ The questions should be related to the major "{{ major }}".
 The questions should be related to the course "{{ course }}".
 {% endif %}
 
-The scope of knowledge must be inside the following key points of knowledge.
-The newly made questions must be different from the known questions.
-And the newly made questions should be more difficult than the known questions.
+If the major or course is related to programming, and the key point of knowledge ({{ exam_kp }}) is about programming, you should include some code case study problems in the questions.
+
+The scope of knowledge must be inside the following key points of knowledge. But you should not only make questions that solely test for concepts.
+The newly made questions must be different from the known questions, and be more difficult than the known questions.
 
 ### Knowledge
 
