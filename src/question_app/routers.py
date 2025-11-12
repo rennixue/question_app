@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+from natsort import natsorted
 
 from .dependencies import (
     AgentDep,
@@ -188,9 +189,10 @@ async def get_order_kps(course_id: int, mysql: MysqlDep, file_limit: int | None 
     new_files_with_types = [
         {
             "file_type": file_type,
-            "files": [
-                {"file_name": it.file_name, "kps": it.kps} for it in files_with_types if it.file_type == file_type
-            ],
+            "files": natsorted(
+                [{"file_name": it.file_name, "kps": it.kps} for it in files_with_types if it.file_type == file_type],
+                key=lambda x: x["file_name"],
+            ),
         }
         for file_type in sorted(set(it.file_type for it in files_with_types), key=lambda it: it.to_int())
     ]
