@@ -44,7 +44,7 @@ class AgentService:
     async def analyze_chunks(self, query: str, chunks: list[str]) -> list[KeyPoint]:
         user_msg = self._tmpl_analyze_chunks.render(query=query, chunks=chunks)
         asst_msg = ""
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text():
                 pass
         if m := re.search(r"(?s)<summary>(.+?)</summary>", asst_msg):
@@ -69,7 +69,7 @@ class AgentService:
             kp=exam_kp, key_points=key_points, questions=[it.content[:1000] for it in questions]
         )
         asst_msg = ""
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 1024}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 1024, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text():
                 pass
         goods = [True for _ in range(len(questions))]
@@ -108,7 +108,7 @@ class AgentService:
             number=number,
         )
         asst_msg = ""
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text():
                 pass
         questions: list[Question] = []
@@ -138,7 +138,7 @@ class AgentService:
             key_points=key_points,
             number=number,
         )
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text(delta=True, debounce_by=0.2):
                 yield asst_msg
 
@@ -164,7 +164,7 @@ class AgentService:
             number=number,
         )
         offset = 0
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text(delta=False, debounce_by=1.0):
                 pairs: list[tuple[str, QuestionType]] = []
                 for it in re.finditer(r"(?s)<question>(.+?)</question>", asst_msg):
@@ -204,7 +204,7 @@ class AgentService:
             known_questions=known_questions,
         )
         offset = 0
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 8192, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text(delta=False, debounce_by=1.0):
                 pairs: list[tuple[str, QuestionType]] = []
                 for it in re.finditer(r"(?s)<question>(.+?)</question>", asst_msg):
@@ -223,7 +223,7 @@ class AgentService:
     async def rewrite(self, *, background: str, prompt: str, question: str) -> Question:
         user_msg = self._tmpl_rewrite.render(background=background, prompt=prompt, question=question)
         asst_msg = ""
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 4096}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 4096, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text():
                 pass
         content, q_type = self._parse_question(asst_msg)
@@ -232,7 +232,7 @@ class AgentService:
     async def analyze_description(self, *, exam_kp: str, context: str) -> AnalyzeDescriptionOutput:
         user_msg = self._tmpl_analyze_description.render(query=exam_kp, description=context)
         asst_msg = ""
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 4096}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 4096, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text():
                 pass
         output = self._parse_analyze_description(asst_msg)
@@ -243,7 +243,7 @@ class AgentService:
     async def analyze_query(self, query: str) -> AnalyzeQueryOutput:
         user_msg = self._tmpl_analyze_query.render(query=query)
         asst_msg = ""
-        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 256}) as result:
+        async with self._chat_agent.run_stream(user_msg, model_settings={"max_tokens": 256, "extra_body": {"thinking": {"type": "disabled"}}}) as result:
             async for asst_msg in result.stream_text():
                 pass
         output = self._parse_analyze_query(asst_msg)
